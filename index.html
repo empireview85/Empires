@@ -900,6 +900,7 @@
         <div id="dashboard" class="page-content animate-fade-in">
             <!-- Stat Cards -->
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <!-- Room status group -->
                 <div class="stat-card" style="border-left:4px solid #10b981;">
                     <div style="display:flex;align-items:center;justify-content:space-between;">
                         <div>
@@ -922,55 +923,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="stat-card" id="dashCard3" style="border-left:4px solid #667eea;">
-                    <div style="display:flex;align-items:center;justify-content:space-between;">
-                        <div style="flex:1;">
-                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide" id="dashCard3Label" data-i18n="stat_income">Total Income</p>
-                            <p class="text-base font-bold text-gray-800 mt-1" id="totalIncomeCount">$0</p>
-                            <p class="text-sm font-bold text-gray-500" id="totalIncomeCountIQD">IQD 0</p>
-                            <p class="text-sm font-bold text-blue-600" id="totalIncomeCountCardIQD"><i class="fas fa-credit-card mr-1"></i>MasterCard IQD 0</p>
-                            <p class="text-xs text-gray-400 mt-1" id="dashIncomeSinceLabel">All-time total</p>
-                            <button onclick="resetDashboardIncome()" id="dashIncomeResetBtn" style="margin-top:6px;padding:3px 10px;font-size:0.7rem;background:#e0e7ff;color:#4f46e5;border:none;border-radius:6px;cursor:pointer;font-weight:600;display:none;">
-                                <i class="fas fa-redo-alt" style="font-size:0.65rem;margin-right:3px;"></i>Reset Counter
-                            </button>
-                        </div>
-                        <div style="width:48px;height:48px;border-radius:12px;background:#e0e7ff;display:flex;align-items:center;justify-content:center;" id="dashCard3IconBg">
-                            <i class="fas fa-dollar-sign" id="dashCard3Icon" style="font-size:1.3rem;color:#667eea;"></i>
-                        </div>
-                    </div>
-                </div>
-                <div class="stat-card" id="dashOutsideIncomeCard" style="border-left:4px solid #f59e0b;">
-                    <div style="display:flex;align-items:center;justify-content:space-between;">
-                        <div style="flex:1;">
-                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Outside Income</p>
-                            <p class="text-base font-bold text-amber-600 mt-1" id="dashOutsideIncomeIQD">IQD 0</p>
-                            <p class="text-sm font-bold text-yellow-600" id="dashOutsideIncomeUSD">$0</p>
-                            <p class="text-xs text-gray-400 mt-1" id="dashOISinceLabel">All-time total</p>
-                            <button onclick="resetDashboardOutsideIncome()" style="margin-top:6px;padding:3px 10px;font-size:0.7rem;background:#fef3c7;color:#92400e;border:none;border-radius:6px;cursor:pointer;font-weight:600;">
-                                <i class="fas fa-redo-alt" style="font-size:0.65rem;margin-right:3px;"></i>Reset Counter
-                            </button>
-                        </div>
-                        <div style="width:48px;height:48px;border-radius:12px;background:#fef3c7;display:flex;align-items:center;justify-content:center;">
-                            <i class="fas fa-hand-holding-usd" style="font-size:1.3rem;color:#f59e0b;"></i>
-                        </div>
-                    </div>
-                </div>
-                <div class="stat-card" id="dashPurchasesCard" style="border-left:4px solid #ef4444;">
-                    <div style="display:flex;align-items:center;justify-content:space-between;">
-                        <div style="flex:1;">
-                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Purchases</p>
-                            <p class="text-base font-bold text-red-500 mt-1" id="dashPurchasesIQD">IQD 0</p>
-                            <p class="text-sm font-bold text-red-400" id="dashPurchasesUSD">$0</p>
-                            <p class="text-xs text-gray-400 mt-1" id="dashPurchSinceLabel">All-time total</p>
-                            <button onclick="resetDashboardPurchases()" style="margin-top:6px;padding:3px 10px;font-size:0.7rem;background:#fee2e2;color:#991b1b;border:none;border-radius:6px;cursor:pointer;font-weight:600;">
-                                <i class="fas fa-redo-alt" style="font-size:0.65rem;margin-right:3px;"></i>Reset Counter
-                            </button>
-                        </div>
-                        <div style="width:48px;height:48px;border-radius:12px;background:#fee2e2;display:flex;align-items:center;justify-content:center;">
-                            <i class="fas fa-shopping-cart" style="font-size:1.3rem;color:#ef4444;"></i>
-                        </div>
-                    </div>
-                </div>
+                <!-- Checkout — grouped with room status (admin only) -->
                 <div class="stat-card" id="dashCard5" style="border-left:4px solid #dc2626;display:none;">
                     <div style="display:flex;align-items:center;justify-content:space-between;">
                         <div>
@@ -979,6 +932,162 @@
                         </div>
                         <div style="width:48px;height:48px;border-radius:12px;background:#fee2e2;display:flex;align-items:center;justify-content:center;">
                             <i class="fas fa-door-open" style="font-size:1.3rem;color:#dc2626;"></i>
+                        </div>
+                    </div>
+                </div>
+                <!-- Cleaning Rooms (reception only) -->
+                <div class="stat-card" id="dashCleaningCard" style="border-left:4px solid #3b82f6;display:none;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <div>
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide" data-i18n="status_cleaning">Cleaning Rooms</p>
+                            <p class="text-3xl font-bold text-gray-800 mt-1" id="dashCleaningCount">0</p>
+                        </div>
+                        <div style="width:48px;height:48px;border-radius:12px;background:#dbeafe;display:flex;align-items:center;justify-content:center;">
+                            <i class="fas fa-broom" style="font-size:1.3rem;color:#3b82f6;"></i>
+                        </div>
+                    </div>
+                </div>
+                <!-- Income — Cash IQD (green) -->
+                <div class="stat-card" id="dashCashIQDCard" style="border-left:4px solid #10b981;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <div style="flex:1;">
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Income — Cash IQD</p>
+                            <p class="text-base font-bold text-green-600 mt-1" id="dashCashIQDValue">IQD 0</p>
+                            <p class="text-xs text-gray-400 mt-1" id="dashCashIQDSince">All-time</p>
+                            <button onclick="resetDashboardIncomeCashIQD()" style="margin-top:6px;padding:3px 10px;font-size:0.7rem;background:#d1fae5;color:#065f46;border:none;border-radius:6px;cursor:pointer;font-weight:600;">
+                                <i class="fas fa-redo-alt" style="font-size:0.65rem;margin-right:3px;"></i>Reset Counter
+                            </button>
+                        </div>
+                        <div style="width:48px;height:48px;border-radius:12px;background:#d1fae5;display:flex;align-items:center;justify-content:center;">
+                            <i class="fas fa-money-bill-wave" style="font-size:1.3rem;color:#10b981;"></i>
+                        </div>
+                    </div>
+                </div>
+                <!-- Income — Cash USD (green) -->
+                <div class="stat-card" id="dashCashUSDCard" style="border-left:4px solid #10b981;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <div style="flex:1;">
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Income — Cash $</p>
+                            <p class="text-base font-bold text-green-600 mt-1" id="dashCashUSDValue">$0</p>
+                            <p class="text-xs text-gray-400 mt-1" id="dashCashUSDSince">All-time</p>
+                            <button onclick="resetDashboardIncomeCashUSD()" style="margin-top:6px;padding:3px 10px;font-size:0.7rem;background:#d1fae5;color:#065f46;border:none;border-radius:6px;cursor:pointer;font-weight:600;">
+                                <i class="fas fa-redo-alt" style="font-size:0.65rem;margin-right:3px;"></i>Reset Counter
+                            </button>
+                        </div>
+                        <div style="width:48px;height:48px;border-radius:12px;background:#d1fae5;display:flex;align-items:center;justify-content:center;">
+                            <i class="fas fa-dollar-sign" style="font-size:1.3rem;color:#10b981;"></i>
+                        </div>
+                    </div>
+                </div>
+                <!-- Income — MasterCard IQD (green) -->
+                <div class="stat-card" id="dashCardIQDCard" style="border-left:4px solid #10b981;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <div style="flex:1;">
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Income — MasterCard IQD</p>
+                            <p class="text-base font-bold text-green-600 mt-1" id="dashCardIQDValue">IQD 0</p>
+                            <p class="text-xs text-gray-400 mt-1" id="dashCardIQDSince">All-time</p>
+                            <button onclick="resetDashboardIncomeMasterCard()" style="margin-top:6px;padding:3px 10px;font-size:0.7rem;background:#d1fae5;color:#065f46;border:none;border-radius:6px;cursor:pointer;font-weight:600;">
+                                <i class="fas fa-redo-alt" style="font-size:0.65rem;margin-right:3px;"></i>Reset Counter
+                            </button>
+                        </div>
+                        <div style="width:48px;height:48px;border-radius:12px;background:#d1fae5;display:flex;align-items:center;justify-content:center;">
+                            <i class="fas fa-credit-card" style="font-size:1.3rem;color:#10b981;"></i>
+                        </div>
+                    </div>
+                </div>
+                <!-- Outside Income — Cash IQD (teal) -->
+                <div class="stat-card" id="dashOICashIQDCard" style="border-left:4px solid #0891b2;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <div style="flex:1;">
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Outside Income (Cash IQD)</p>
+                            <p class="text-base font-bold mt-1" style="color:#0891b2;" id="dashOICashIQDValue">IQD 0</p>
+                            <p class="text-xs text-gray-400 mt-1" id="dashOICashIQDSince">All-time</p>
+                            <button onclick="resetDashOICashIQD()" style="margin-top:6px;padding:3px 10px;font-size:0.7rem;background:#cffafe;color:#164e63;border:none;border-radius:6px;cursor:pointer;font-weight:600;">
+                                <i class="fas fa-redo-alt" style="font-size:0.65rem;margin-right:3px;"></i>Reset Counter
+                            </button>
+                        </div>
+                        <div style="width:48px;height:48px;border-radius:12px;background:#cffafe;display:flex;align-items:center;justify-content:center;">
+                            <i class="fas fa-hand-holding-usd" style="font-size:1.3rem;color:#0891b2;"></i>
+                        </div>
+                    </div>
+                </div>
+                <!-- Outside Income — Cash USD (teal) -->
+                <div class="stat-card" id="dashOICashUSDCard" style="border-left:4px solid #0891b2;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <div style="flex:1;">
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Outside Income (Cash $)</p>
+                            <p class="text-base font-bold mt-1" style="color:#0891b2;" id="dashOICashUSDValue">$0</p>
+                            <p class="text-xs text-gray-400 mt-1" id="dashOICashUSDSince">All-time</p>
+                            <button onclick="resetDashOICashUSD()" style="margin-top:6px;padding:3px 10px;font-size:0.7rem;background:#cffafe;color:#164e63;border:none;border-radius:6px;cursor:pointer;font-weight:600;">
+                                <i class="fas fa-redo-alt" style="font-size:0.65rem;margin-right:3px;"></i>Reset Counter
+                            </button>
+                        </div>
+                        <div style="width:48px;height:48px;border-radius:12px;background:#cffafe;display:flex;align-items:center;justify-content:center;">
+                            <i class="fas fa-dollar-sign" style="font-size:1.3rem;color:#0891b2;"></i>
+                        </div>
+                    </div>
+                </div>
+                <!-- Outside Income — MasterCard IQD (teal) -->
+                <div class="stat-card" id="dashOICardIQDCard" style="border-left:4px solid #0891b2;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <div style="flex:1;">
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Outside Income (MasterCard)</p>
+                            <p class="text-base font-bold mt-1" style="color:#0891b2;" id="dashOICardIQDValue">IQD 0</p>
+                            <p class="text-xs text-gray-400 mt-1" id="dashOICardIQDSince">All-time</p>
+                            <button onclick="resetDashOIMasterCard()" style="margin-top:6px;padding:3px 10px;font-size:0.7rem;background:#cffafe;color:#164e63;border:none;border-radius:6px;cursor:pointer;font-weight:600;">
+                                <i class="fas fa-redo-alt" style="font-size:0.65rem;margin-right:3px;"></i>Reset Counter
+                            </button>
+                        </div>
+                        <div style="width:48px;height:48px;border-radius:12px;background:#cffafe;display:flex;align-items:center;justify-content:center;">
+                            <i class="fas fa-credit-card" style="font-size:1.3rem;color:#0891b2;"></i>
+                        </div>
+                    </div>
+                </div>
+                <!-- Purchases — Cash IQD (red) -->
+                <div class="stat-card" id="dashPurchCashIQDCard" style="border-left:4px solid #ef4444;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <div style="flex:1;">
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Purchases (Cash IQD)</p>
+                            <p class="text-base font-bold text-red-500 mt-1" id="dashPurchCashIQDValue">IQD 0</p>
+                            <p class="text-xs text-gray-400 mt-1" id="dashPurchCashIQDSince">All-time</p>
+                            <button onclick="resetDashPurchCashIQD()" style="margin-top:6px;padding:3px 10px;font-size:0.7rem;background:#fee2e2;color:#991b1b;border:none;border-radius:6px;cursor:pointer;font-weight:600;">
+                                <i class="fas fa-redo-alt" style="font-size:0.65rem;margin-right:3px;"></i>Reset Counter
+                            </button>
+                        </div>
+                        <div style="width:48px;height:48px;border-radius:12px;background:#fee2e2;display:flex;align-items:center;justify-content:center;">
+                            <i class="fas fa-shopping-cart" style="font-size:1.3rem;color:#ef4444;"></i>
+                        </div>
+                    </div>
+                </div>
+                <!-- Purchases — Cash USD (red) -->
+                <div class="stat-card" id="dashPurchUSDCard" style="border-left:4px solid #ef4444;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <div style="flex:1;">
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Purchases (Cash $)</p>
+                            <p class="text-base font-bold text-red-500 mt-1" id="dashPurchUSDValue">$0</p>
+                            <p class="text-xs text-gray-400 mt-1" id="dashPurchUSDSince">All-time</p>
+                            <button onclick="resetDashPurchCashUSD()" style="margin-top:6px;padding:3px 10px;font-size:0.7rem;background:#fee2e2;color:#991b1b;border:none;border-radius:6px;cursor:pointer;font-weight:600;">
+                                <i class="fas fa-redo-alt" style="font-size:0.65rem;margin-right:3px;"></i>Reset Counter
+                            </button>
+                        </div>
+                        <div style="width:48px;height:48px;border-radius:12px;background:#fee2e2;display:flex;align-items:center;justify-content:center;">
+                            <i class="fas fa-dollar-sign" style="font-size:1.3rem;color:#ef4444;"></i>
+                        </div>
+                    </div>
+                </div>
+                <!-- Purchases — MasterCard IQD (red) -->
+                <div class="stat-card" id="dashPurchCardIQDCard" style="border-left:4px solid #ef4444;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <div style="flex:1;">
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Purchases (MasterCard)</p>
+                            <p class="text-base font-bold text-red-500 mt-1" id="dashPurchCardIQDValue">IQD 0</p>
+                            <p class="text-xs text-gray-400 mt-1" id="dashPurchCardIQDSince">All-time</p>
+                            <button onclick="resetDashPurchMasterCard()" style="margin-top:6px;padding:3px 10px;font-size:0.7rem;background:#fee2e2;color:#991b1b;border:none;border-radius:6px;cursor:pointer;font-weight:600;">
+                                <i class="fas fa-redo-alt" style="font-size:0.65rem;margin-right:3px;"></i>Reset Counter
+                            </button>
+                        </div>
+                        <div style="width:48px;height:48px;border-radius:12px;background:#fee2e2;display:flex;align-items:center;justify-content:center;">
+                            <i class="fas fa-credit-card" style="font-size:1.3rem;color:#ef4444;"></i>
                         </div>
                     </div>
                 </div>
@@ -1268,6 +1377,7 @@
                     <p class="text-gray-500 text-xs font-semibold uppercase tracking-wide">Outside Income</p>
                     <h3 class="text-lg font-bold text-amber-600 mt-1" id="outsideIncomeIQDReport">IQD 0</h3>
                     <h3 class="text-lg font-bold text-yellow-600" id="outsideIncomeUSDReport">$0</h3>
+                    <h3 class="text-base font-bold text-blue-600" id="outsideIncomeCardIQDReport"><i class="fas fa-credit-card" style="font-size:0.75rem;margin-right:4px;"></i>IQD 0</h3>
                 </div>
             </div>
 
@@ -1355,6 +1465,7 @@
                                 <th>MasterCard (IQD)</th>
                                 <th>Notes</th>
                                 <th data-i18n="col_date">Date</th>
+                                <th id="purchAddedByTh">Added By</th>
                                 <th data-i18n="col_action">Action</th>
                             </tr>
                         </thead>
@@ -1382,16 +1493,18 @@
                             <tr>
                                 <th data-i18n="col_num">#</th>
                                 <th data-i18n="col_name">Name</th>
-                                <th>Price (IQD)</th>
-                                <th>Price ($)</th>
+                                <th>Cash (IQD)</th>
+                                <th>Cash ($)</th>
+                                <th>MasterCard (IQD)</th>
                                 <th>Notes</th>
                                 <th data-i18n="col_date">Date</th>
+                                <th id="oiAddedByTh">Added By</th>
                                 <th data-i18n="col_action">Action</th>
                             </tr>
                         </thead>
                         <tbody id="outsideIncomeTable">
                             <tr>
-                                <td colspan="7" class="text-center text-gray-500 py-8">No outside income yet</td>
+                                <td colspan="8" class="text-center text-gray-500 py-8">No outside income yet</td>
                             </tr>
                         </tbody>
                     </table>
@@ -1739,7 +1852,12 @@
                         oninput="this.value=this.value.replace(/[^0-9]/g,'').replace(/\B(?=(\d{3})+(?!\d))/g,',')">
                 </div>
             </div>
-            <div class="flex gap-4 mt-2">
+            <div class="input-group mt-4" style="margin-bottom:0;">
+                <label data-i18n="label_notes">Notes</label>
+                <input type="text" id="addDepositNotes" placeholder="Optional notes"
+                    class="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500">
+            </div>
+            <div class="flex gap-4 mt-4">
                 <button type="button" class="btn btn-success flex-1" onclick="confirmAddDeposit()">
                     <i class="fas fa-hand-holding-usd"></i> <span data-i18n="btn_add_deposit">Add Deposit</span>
                 </button>
@@ -2055,16 +2173,21 @@
                     <label><span data-i18n="label_name_req">Name</span> <span style="color:#ef4444;">*</span></label>
                     <input type="text" id="outsideIncomeName" placeholder="Enter name" required>
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
                     <div class="input-group" style="margin-bottom:0;">
-                        <label>Price (IQD)</label>
+                        <label>Cash (IQD)</label>
                         <input type="text" id="outsideIncomePriceIQD" inputmode="numeric" placeholder="0"
                             oninput="this.value=this.value.replace(/[^0-9]/g,'').replace(/\B(?=(\d{3})+(?!\d))/g,',')">
                     </div>
                     <div class="input-group" style="margin-bottom:0;">
-                        <label>Price ($)</label>
+                        <label>Cash ($)</label>
                         <input type="text" id="outsideIncomePriceUSD" inputmode="decimal" placeholder="0.00"
                             oninput="this.value=this.value.replace(/[^0-9.]/g,'')">
+                    </div>
+                    <div class="input-group" style="margin-bottom:0;">
+                        <label>MasterCard (IQD)</label>
+                        <input type="text" id="outsideIncomePriceCardIQD" inputmode="numeric" placeholder="0"
+                            oninput="this.value=this.value.replace(/[^0-9]/g,'').replace(/\B(?=(\d{3})+(?!\d))/g,',')">
                     </div>
                 </div>
                 <p style="font-size:0.75rem;color:#9ca3af;margin:4px 0 12px;">Fill at least one price field.</p>
