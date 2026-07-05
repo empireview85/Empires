@@ -2315,8 +2315,9 @@ function updateReportsStats() {
     // Outside income
     const oiAll = hotelData.outsideIncome || [];
     const oi = _reportDateFrom ? oiAll.filter(p => inRange(p.date)) : oiAll;
-    const oiIQD = oi.reduce((s, p) => s + (p.priceIQD || 0), 0);
-    const oiUSD = oi.reduce((s, p) => s + (p.priceUSD || 0), 0);
+    const oiIQD     = oi.reduce((s, p) => s + (p.priceIQD     || 0), 0);
+    const oiUSD     = oi.reduce((s, p) => s + (p.priceUSD     || 0), 0);
+    const oiCardIQD = oi.reduce((s, p) => s + (p.priceCardIQD || 0), 0);
 
     const occupiedRooms = hotelData.rooms.filter(r => r.status === 'occupied').length;
     const occupancyRate = hotelData.rooms.length > 0 ? ((occupiedRooms / hotelData.rooms.length) * 100).toFixed(1) : 0;
@@ -2326,9 +2327,11 @@ function updateReportsStats() {
     document.getElementById('totalIncomeCardIQDReport').textContent = `IQD ${fmtIQD(cardIQD)}`;
     document.getElementById('totalPurchasesIQDReport').textContent = `IQD ${fmtIQD(purchIQD)}`;
     document.getElementById('totalPurchasesUSDReport').textContent = `$${fmtUSD(purchUSD)}`;
-    document.getElementById('outsideIncomeIQDReport').textContent = `IQD ${fmtIQD(oiIQD)}`;
-    document.getElementById('outsideIncomeUSDReport').textContent = `$${fmtUSD(oiUSD)}`;
-    document.getElementById('netRevenueIQDReport').textContent = `IQD ${fmtIQD(cashIQD + cardIQD + oiIQD - purchIQD)}`;
+    document.getElementById('outsideIncomeIQDReport').textContent     = `IQD ${fmtIQD(oiIQD)}`;
+    document.getElementById('outsideIncomeUSDReport').textContent     = `$${fmtUSD(oiUSD)}`;
+    const oiCardEl = document.getElementById('outsideIncomeCardIQDReport');
+    if (oiCardEl) oiCardEl.textContent = `IQD ${fmtIQD(oiCardIQD)}`;
+    document.getElementById('netRevenueIQDReport').textContent = `IQD ${fmtIQD(cashIQD + cardIQD + oiIQD + oiCardIQD - purchIQD)}`;
     document.getElementById('netRevenueUSDReport').textContent = `$${fmtUSD(cashUSD + oiUSD - purchUSD)}`;
     document.getElementById('occupancyRateReport').textContent = `${occupancyRate}%`;
 
@@ -2551,66 +2554,77 @@ function updateDashboardStats() {
 
     const dashCard5 = document.getElementById('dashCard5');
 
-    const oiCard    = document.getElementById('dashOutsideIncomeCard');
-    const purchCard = document.getElementById('dashPurchasesCard');
+    const adminOnlyCardIds = [
+        'dashCashIQDCard','dashCashUSDCard','dashCardIQDCard',
+        'dashOICashIQDCard','dashOICashUSDCard','dashOICardIQDCard',
+        'dashPurchCashIQDCard','dashPurchUSDCard','dashPurchCardIQDCard'
+    ];
+    const cleaningCard = document.getElementById('dashCleaningCard');
+    const fmt = d => new Date(d).toLocaleDateString();
+    const lastOf = arr => arr.length ? arr[arr.length - 1] : null;
 
     if (isReception) {
-        // Reception: hide financial cards, show cleaning workload on card 3
-        if (oiCard)    oiCard.style.display    = 'none';
-        if (purchCard) purchCard.style.display  = 'none';
-        const cleaningCount = hotelData.rooms.filter(r => r.status === 'cleaning').length;
-        _set('dashCard3Label', t('status_cleaning') || 'Cleaning');
-        _set('totalIncomeCount', cleaningCount);
-        _set('totalIncomeCountIQD', '');
-        _set('totalIncomeCountCardIQD', '');
-        setCardIcon('dashCard3Icon', 'dashCard3IconBg', 'dashCard3', 'fas fa-broom', '#3b82f6', '#dbeafe', '#3b82f6');
-        const resetBtn = document.getElementById('dashIncomeResetBtn');
-        if (resetBtn) resetBtn.style.display = 'none';
+        adminOnlyCardIds.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+        if (cleaningCard) cleaningCard.style.display = '';
+        _set('dashCleaningCount', hotelData.rooms.filter(r => r.status === 'cleaning').length);
         if (dashCard5) dashCard5.style.display = 'none';
     } else {
-        if (oiCard)    oiCard.style.display    = '';
-        if (purchCard) purchCard.style.display  = '';
+        adminOnlyCardIds.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = ''; });
+        if (cleaningCard) cleaningCard.style.display = 'none';
 
-        // Outside income with reset baseline
-        const oiAllArr  = hotelData.outsideIncome || [];
-        const oiAllIQD  = oiAllArr.reduce((s, p) => s + (p.priceIQD || 0), 0);
-        const oiAllUSD  = oiAllArr.reduce((s, p) => s + (p.priceUSD || 0), 0);
-        const oiResets  = hotelData.outsideIncomeResets || [];
-        const lastOiR   = oiResets.length > 0 ? oiResets[oiResets.length - 1] : null;
-        const oiIQD     = oiAllIQD - (lastOiR ? lastOiR.iqd : 0);
-        const oiUSD     = oiAllUSD - (lastOiR ? lastOiR.usd : 0);
-        _set('dashOutsideIncomeIQD', `IQD ${fmtIQD(oiIQD)}`);
-        _set('dashOutsideIncomeUSD', `$${fmtUSD(oiUSD)}`);
-        const oiSince = document.getElementById('dashOISinceLabel');
-        if (oiSince) oiSince.textContent = lastOiR ? `Since ${new Date(lastOiR.resetAt).toLocaleDateString()}` : 'All-time total';
+        // ── Outside Income — per-currency resets ──
+        const oiAllArr     = hotelData.outsideIncome || [];
+        const oiAllCashIQD = oiAllArr.reduce((s, p) => s + (p.priceIQD     || 0), 0);
+        const oiAllCashUSD = oiAllArr.reduce((s, p) => s + (p.priceUSD     || 0), 0);
+        const oiAllCardIQD = oiAllArr.reduce((s, p) => s + (p.priceCardIQD || 0), 0);
+        const oldOiLast    = lastOf(hotelData.outsideIncomeResets || []);
+        const lastOiIQD    = lastOf(hotelData.oiResetsIQD     || []);
+        const lastOiUSD    = lastOf(hotelData.oiResetsUSD     || []);
+        const lastOiCard   = lastOf(hotelData.oiResetsCardIQD || []);
+        const oiCashIQD = oiAllCashIQD - (lastOiIQD  ? lastOiIQD.value  : (oldOiLast ? oldOiLast.iqd          : 0));
+        const oiCashUSD = oiAllCashUSD - (lastOiUSD  ? lastOiUSD.value  : (oldOiLast ? oldOiLast.usd          : 0));
+        const oiCardIQD = oiAllCardIQD - (lastOiCard ? lastOiCard.value : (oldOiLast ? (oldOiLast.cardIQD || 0) : 0));
+        _set('dashOICashIQDValue',  `IQD ${fmtIQD(oiCashIQD)}`);
+        _set('dashOICashUSDValue',  `$${fmtUSD(oiCashUSD)}`);
+        _set('dashOICardIQDValue',  `IQD ${fmtIQD(oiCardIQD)}`);
+        const el_oiIS = document.getElementById('dashOICashIQDSince');  if (el_oiIS)  el_oiIS.textContent  = lastOiIQD  ? `Since ${fmt(lastOiIQD.resetAt)}`  : (oldOiLast ? `Since ${fmt(oldOiLast.resetAt)}` : 'All-time');
+        const el_oiUS = document.getElementById('dashOICashUSDSince');  if (el_oiUS)  el_oiUS.textContent  = lastOiUSD  ? `Since ${fmt(lastOiUSD.resetAt)}`  : (oldOiLast ? `Since ${fmt(oldOiLast.resetAt)}` : 'All-time');
+        const el_oiCS = document.getElementById('dashOICardIQDSince');  if (el_oiCS)  el_oiCS.textContent  = lastOiCard ? `Since ${fmt(lastOiCard.resetAt)}` : (oldOiLast ? `Since ${fmt(oldOiLast.resetAt)}` : 'All-time');
 
-        // Purchases with reset baseline
-        const purchAllArr  = hotelData.purchases || [];
-        const purchAllIQD  = purchAllArr.reduce((s, p) => s + (p.priceIQD != null ? p.priceIQD : (p.price || 0)) + (p.priceCardIQD || 0), 0);
-        const purchAllUSD  = purchAllArr.reduce((s, p) => s + (p.priceUSD || 0), 0);
-        const purchResets  = hotelData.purchasesResets || [];
-        const lastPurchR   = purchResets.length > 0 ? purchResets[purchResets.length - 1] : null;
-        const purchIQD     = purchAllIQD - (lastPurchR ? lastPurchR.iqd : 0);
-        const purchUSD     = purchAllUSD - (lastPurchR ? lastPurchR.usd : 0);
-        _set('dashPurchasesIQD', `IQD ${fmtIQD(purchIQD)}`);
-        _set('dashPurchasesUSD', `$${fmtUSD(purchUSD)}`);
-        const purchSince = document.getElementById('dashPurchSinceLabel');
-        if (purchSince) purchSince.textContent = lastPurchR ? `Since ${new Date(lastPurchR.resetAt).toLocaleDateString()}` : 'All-time total';
-        const all = calculateTotalIncomeByMethod();
-        const resets = hotelData.incomeResets || [];
-        const lastReset = resets.length > 0 ? resets[resets.length - 1] : null;
-        const cashIQD = all.cashIQD - (lastReset ? lastReset.cashIQD : 0);
-        const cashUSD = all.cashUSD - (lastReset ? lastReset.cashUSD : 0);
-        const cardIQD = all.cardIQD - (lastReset ? lastReset.cardIQD : 0);
-        _set('dashCard3Label', t('stat_income'));
-        _set('totalIncomeCount', `Cash $${fmtUSD(cashUSD)}`);
-        _set('totalIncomeCountIQD', `Cash IQD ${fmtIQD(cashIQD)}`);
-        _set('totalIncomeCountCardIQD', `MasterCard IQD ${fmtIQD(cardIQD)}`);
-        const sinceEl = document.getElementById('dashIncomeSinceLabel');
-        if (sinceEl) sinceEl.textContent = lastReset ? `Since ${new Date(lastReset.resetAt).toLocaleDateString()}` : 'All-time total';
-        const resetBtn = document.getElementById('dashIncomeResetBtn');
-        if (resetBtn) resetBtn.style.display = '';
-        setCardIcon('dashCard3Icon', 'dashCard3IconBg', 'dashCard3', 'fas fa-dollar-sign', '#667eea', '#e0e7ff', '#667eea');
+        // ── Purchases — per-currency resets ──
+        const purchAllArr     = hotelData.purchases || [];
+        const purchAllCashIQD = purchAllArr.reduce((s, p) => s + (p.priceIQD != null ? p.priceIQD : (p.price || 0)), 0);
+        const purchAllCashUSD = purchAllArr.reduce((s, p) => s + (p.priceUSD     || 0), 0);
+        const purchAllCardIQD = purchAllArr.reduce((s, p) => s + (p.priceCardIQD || 0), 0);
+        const oldPurchLast    = lastOf(hotelData.purchasesResets || []);
+        const lastPurchIQD    = lastOf(hotelData.purchResetsIQD     || []);
+        const lastPurchUSD    = lastOf(hotelData.purchResetsUSD     || []);
+        const lastPurchCard   = lastOf(hotelData.purchResetsCardIQD || []);
+        const purchCashIQD = purchAllCashIQD - (lastPurchIQD  ? lastPurchIQD.value  : (oldPurchLast ? (oldPurchLast.cashIQD || 0) : 0));
+        const purchCashUSD = purchAllCashUSD - (lastPurchUSD  ? lastPurchUSD.value  : (oldPurchLast ? oldPurchLast.usd          : 0));
+        const purchCardIQD = purchAllCardIQD - (lastPurchCard ? lastPurchCard.value : (oldPurchLast ? (oldPurchLast.cardIQD || 0) : 0));
+        _set('dashPurchCashIQDValue',  `IQD ${fmtIQD(purchCashIQD)}`);
+        _set('dashPurchUSDValue',      `$${fmtUSD(purchCashUSD)}`);
+        _set('dashPurchCardIQDValue',  `IQD ${fmtIQD(purchCardIQD)}`);
+        const el_pIS = document.getElementById('dashPurchCashIQDSince'); if (el_pIS) el_pIS.textContent = lastPurchIQD  ? `Since ${fmt(lastPurchIQD.resetAt)}`  : (oldPurchLast ? `Since ${fmt(oldPurchLast.resetAt)}` : 'All-time');
+        const el_pUS = document.getElementById('dashPurchUSDSince');     if (el_pUS) el_pUS.textContent = lastPurchUSD  ? `Since ${fmt(lastPurchUSD.resetAt)}`  : (oldPurchLast ? `Since ${fmt(oldPurchLast.resetAt)}` : 'All-time');
+        const el_pCS = document.getElementById('dashPurchCardIQDSince'); if (el_pCS) el_pCS.textContent = lastPurchCard ? `Since ${fmt(lastPurchCard.resetAt)}` : (oldPurchLast ? `Since ${fmt(oldPurchLast.resetAt)}` : 'All-time');
+
+        // ── Income — per-currency resets ──
+        const all     = calculateTotalIncomeByMethod();
+        const oldLast = lastOf(hotelData.incomeResets || []);
+        const lastIQD  = lastOf(hotelData.incomeResetsIQD     || []);
+        const lastUSD  = lastOf(hotelData.incomeResetsUSD     || []);
+        const lastCard = lastOf(hotelData.incomeResetsCardIQD || []);
+        const cashIQD  = all.cashIQD - (lastIQD  ? lastIQD.value  : (oldLast ? oldLast.cashIQD : 0));
+        const cashUSD  = all.cashUSD - (lastUSD  ? lastUSD.value  : (oldLast ? oldLast.cashUSD : 0));
+        const cardIQD  = all.cardIQD - (lastCard ? lastCard.value : (oldLast ? oldLast.cardIQD : 0));
+        _set('dashCashIQDValue', `IQD ${fmtIQD(cashIQD)}`);
+        _set('dashCashUSDValue', `$${fmtUSD(cashUSD)}`);
+        _set('dashCardIQDValue', `IQD ${fmtIQD(cardIQD)}`);
+        const el_iIS = document.getElementById('dashCashIQDSince');  if (el_iIS)  el_iIS.textContent  = lastIQD  ? `Since ${fmt(lastIQD.resetAt)}`  : (oldLast ? `Since ${fmt(oldLast.resetAt)}` : 'All-time');
+        const el_iUS = document.getElementById('dashCashUSDSince');  if (el_iUS)  el_iUS.textContent  = lastUSD  ? `Since ${fmt(lastUSD.resetAt)}`  : (oldLast ? `Since ${fmt(oldLast.resetAt)}` : 'All-time');
+        const el_iCS = document.getElementById('dashCardIQDSince');  if (el_iCS)  el_iCS.textContent  = lastCard ? `Since ${fmt(lastCard.resetAt)}` : (oldLast ? `Since ${fmt(oldLast.resetAt)}` : 'All-time');
 
         const checkoutCount = hotelData.rooms.filter(r => r.status === 'checkout').length;
         _set('checkoutRoomsCount', checkoutCount);
@@ -2618,44 +2632,88 @@ function updateDashboardStats() {
     }
 }
 
-function resetDashboardIncome() {
-    if (!confirm('Reset the income counter to zero?\n\nAll data stays in the database — only the display resets. You can see past reset history in the database.')) return;
+function resetDashboardIncomeCashIQD() {
+    if (!confirm('Reset the Cash IQD income counter to zero?\n\nAll data stays — only the display resets.')) return;
     const all = calculateTotalIncomeByMethod();
-    if (!Array.isArray(hotelData.incomeResets)) hotelData.incomeResets = [];
-    hotelData.incomeResets.push({
-        cashIQD: all.cashIQD,
-        cashUSD: all.cashUSD,
-        cardIQD: all.cardIQD,
-        resetAt: new Date().toISOString(),
-        resetBy: loggedInUser?.name || '—'
-    });
+    if (!Array.isArray(hotelData.incomeResetsIQD)) hotelData.incomeResetsIQD = [];
+    hotelData.incomeResetsIQD.push({ value: all.cashIQD, resetAt: new Date().toISOString(), resetBy: loggedInUser?.name || '—' });
     saveDataToStorage();
     updateDashboardStats();
-    showToast('Income counter reset to zero. All data preserved in database.', 'success');
+    showToast('Cash IQD counter reset to zero.', 'success');
 }
 
-function resetDashboardOutsideIncome() {
-    if (!confirm('Reset the Outside Income counter to zero?\n\nAll data stays in the database — only the display resets.')) return;
-    const arr = hotelData.outsideIncome || [];
-    const iqd = arr.reduce((s, p) => s + (p.priceIQD || 0), 0);
-    const usd = arr.reduce((s, p) => s + (p.priceUSD || 0), 0);
-    if (!Array.isArray(hotelData.outsideIncomeResets)) hotelData.outsideIncomeResets = [];
-    hotelData.outsideIncomeResets.push({ iqd, usd, resetAt: new Date().toISOString(), resetBy: loggedInUser?.name || '—' });
+function resetDashboardIncomeCashUSD() {
+    if (!confirm('Reset the Cash USD income counter to zero?\n\nAll data stays — only the display resets.')) return;
+    const all = calculateTotalIncomeByMethod();
+    if (!Array.isArray(hotelData.incomeResetsUSD)) hotelData.incomeResetsUSD = [];
+    hotelData.incomeResetsUSD.push({ value: all.cashUSD, resetAt: new Date().toISOString(), resetBy: loggedInUser?.name || '—' });
     saveDataToStorage();
     updateDashboardStats();
-    showToast('Outside Income counter reset to zero. All data preserved in database.', 'success');
+    showToast('Cash USD counter reset to zero.', 'success');
 }
 
-function resetDashboardPurchases() {
-    if (!confirm('Reset the Purchases counter to zero?\n\nAll data stays in the database — only the display resets.')) return;
-    const arr = hotelData.purchases || [];
-    const iqd = arr.reduce((s, p) => s + (p.priceIQD != null ? p.priceIQD : (p.price || 0)) + (p.priceCardIQD || 0), 0);
-    const usd = arr.reduce((s, p) => s + (p.priceUSD || 0), 0);
-    if (!Array.isArray(hotelData.purchasesResets)) hotelData.purchasesResets = [];
-    hotelData.purchasesResets.push({ iqd, usd, resetAt: new Date().toISOString(), resetBy: loggedInUser?.name || '—' });
+function resetDashboardIncomeMasterCard() {
+    if (!confirm('Reset the MasterCard IQD income counter to zero?\n\nAll data stays — only the display resets.')) return;
+    const all = calculateTotalIncomeByMethod();
+    if (!Array.isArray(hotelData.incomeResetsCardIQD)) hotelData.incomeResetsCardIQD = [];
+    hotelData.incomeResetsCardIQD.push({ value: all.cardIQD, resetAt: new Date().toISOString(), resetBy: loggedInUser?.name || '—' });
     saveDataToStorage();
     updateDashboardStats();
-    showToast('Purchases counter reset to zero. All data preserved in database.', 'success');
+    showToast('MasterCard IQD counter reset to zero.', 'success');
+}
+
+function resetDashOICashIQD() {
+    if (!confirm('Reset the Outside Income Cash IQD counter to zero?\n\nAll data stays — only the display resets.')) return;
+    const val = (hotelData.outsideIncome || []).reduce((s, p) => s + (p.priceIQD || 0), 0);
+    if (!Array.isArray(hotelData.oiResetsIQD)) hotelData.oiResetsIQD = [];
+    hotelData.oiResetsIQD.push({ value: val, resetAt: new Date().toISOString(), resetBy: loggedInUser?.name || '—' });
+    saveDataToStorage(); updateDashboardStats();
+    showToast('Outside Income Cash IQD counter reset to zero.', 'success');
+}
+
+function resetDashOICashUSD() {
+    if (!confirm('Reset the Outside Income Cash USD counter to zero?\n\nAll data stays — only the display resets.')) return;
+    const val = (hotelData.outsideIncome || []).reduce((s, p) => s + (p.priceUSD || 0), 0);
+    if (!Array.isArray(hotelData.oiResetsUSD)) hotelData.oiResetsUSD = [];
+    hotelData.oiResetsUSD.push({ value: val, resetAt: new Date().toISOString(), resetBy: loggedInUser?.name || '—' });
+    saveDataToStorage(); updateDashboardStats();
+    showToast('Outside Income Cash USD counter reset to zero.', 'success');
+}
+
+function resetDashOIMasterCard() {
+    if (!confirm('Reset the Outside Income MasterCard IQD counter to zero?\n\nAll data stays — only the display resets.')) return;
+    const val = (hotelData.outsideIncome || []).reduce((s, p) => s + (p.priceCardIQD || 0), 0);
+    if (!Array.isArray(hotelData.oiResetsCardIQD)) hotelData.oiResetsCardIQD = [];
+    hotelData.oiResetsCardIQD.push({ value: val, resetAt: new Date().toISOString(), resetBy: loggedInUser?.name || '—' });
+    saveDataToStorage(); updateDashboardStats();
+    showToast('Outside Income MasterCard IQD counter reset to zero.', 'success');
+}
+
+function resetDashPurchCashIQD() {
+    if (!confirm('Reset the Purchases Cash IQD counter to zero?\n\nAll data stays — only the display resets.')) return;
+    const val = (hotelData.purchases || []).reduce((s, p) => s + (p.priceIQD != null ? p.priceIQD : (p.price || 0)), 0);
+    if (!Array.isArray(hotelData.purchResetsIQD)) hotelData.purchResetsIQD = [];
+    hotelData.purchResetsIQD.push({ value: val, resetAt: new Date().toISOString(), resetBy: loggedInUser?.name || '—' });
+    saveDataToStorage(); updateDashboardStats();
+    showToast('Purchases Cash IQD counter reset to zero.', 'success');
+}
+
+function resetDashPurchCashUSD() {
+    if (!confirm('Reset the Purchases Cash USD counter to zero?\n\nAll data stays — only the display resets.')) return;
+    const val = (hotelData.purchases || []).reduce((s, p) => s + (p.priceUSD || 0), 0);
+    if (!Array.isArray(hotelData.purchResetsUSD)) hotelData.purchResetsUSD = [];
+    hotelData.purchResetsUSD.push({ value: val, resetAt: new Date().toISOString(), resetBy: loggedInUser?.name || '—' });
+    saveDataToStorage(); updateDashboardStats();
+    showToast('Purchases Cash USD counter reset to zero.', 'success');
+}
+
+function resetDashPurchMasterCard() {
+    if (!confirm('Reset the Purchases MasterCard IQD counter to zero?\n\nAll data stays — only the display resets.')) return;
+    const val = (hotelData.purchases || []).reduce((s, p) => s + (p.priceCardIQD || 0), 0);
+    if (!Array.isArray(hotelData.purchResetsCardIQD)) hotelData.purchResetsCardIQD = [];
+    hotelData.purchResetsCardIQD.push({ value: val, resetAt: new Date().toISOString(), resetBy: loggedInUser?.name || '—' });
+    saveDataToStorage(); updateDashboardStats();
+    showToast('Purchases MasterCard IQD counter reset to zero.', 'success');
 }
 
 function updateDashboardCharts() {
@@ -3293,7 +3351,7 @@ function openAddDepositModal(roomId) {
     if (!guest) return;
     _addDepositRoomId = roomId;
 
-    ['addDepositCashIQD', 'addDepositCashUSD', 'addDepositCardIQD'].forEach(id => {
+    ['addDepositCashIQD', 'addDepositCashUSD', 'addDepositCardIQD', 'addDepositNotes'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });
@@ -3321,6 +3379,7 @@ function confirmAddDeposit() {
     const cashIQD = parseFloat((document.getElementById('addDepositCashIQD')?.value || '').replace(/,/g, '')) || 0;
     const cashUSD = parseFloat(document.getElementById('addDepositCashUSD')?.value) || 0;
     const cardIQD = parseFloat((document.getElementById('addDepositCardIQD')?.value || '').replace(/,/g, '')) || 0;
+    const notes   = (document.getElementById('addDepositNotes')?.value || '').trim();
 
     if (cashIQD <= 0 && cashUSD <= 0 && cardIQD <= 0) {
         showToast(t('err_enter_amount') || 'Enter at least one amount.', 'error');
@@ -3335,7 +3394,7 @@ function confirmAddDeposit() {
 
     if (!Array.isArray(guest.depositLog)) guest.depositLog = [];
     guest.depositLog.push({
-        cashIQD, cashUSD, cardIQD,
+        cashIQD, cashUSD, cardIQD, notes,
         addedAt: new Date().toISOString(),
         addedBy: loggedInUser?.name || '—'
     });
@@ -4066,8 +4125,9 @@ function downloadShiftReport(autoExcel = false, shiftId = null, monthKey = null,
 
     // Outside income added by this staff member during this shift
     const outsideIncomeToday = (hotelData.outsideIncome || []).filter(p => inShift(p.date) && byMe(p.addedBy));
-    const oiIQD = outsideIncomeToday.reduce((sum, p) => sum + (p.priceIQD||0), 0);
-    const oiUSD = outsideIncomeToday.reduce((sum, p) => sum + (p.priceUSD||0), 0);
+    const oiIQD     = outsideIncomeToday.reduce((sum, p) => sum + (p.priceIQD     || 0), 0);
+    const oiUSD     = outsideIncomeToday.reduce((sum, p) => sum + (p.priceUSD     || 0), 0);
+    const oiCardIQD = outsideIncomeToday.reduce((sum, p) => sum + (p.priceCardIQD || 0), 0);
 
     let adCashIQD = 0, adCashUSD = 0, adCardIQD = 0;
     additionalDepositsToday.forEach(({ entry: d }) => { adCashIQD += d.cashIQD||0; adCashUSD += d.cashUSD||0; adCardIQD += d.cardIQD||0; });
@@ -4079,7 +4139,7 @@ function downloadShiftReport(autoExcel = false, shiftId = null, monthKey = null,
     const purchIQD = purchCashIQDShift + purchCardIQDShift;
     const purchUSD = purchasesToday.reduce((sum, p) => sum + (p.priceUSD||0), 0);
 
-    const grandIQD = ciCashIQD + ciCardIQD + coCashIQD + coCardIQD + resCashIQD + resCardIQD + oiIQD + adCashIQD + adCardIQD - purchIQD;
+    const grandIQD = ciCashIQD + ciCardIQD + coCashIQD + coCardIQD + resCashIQD + resCardIQD + oiIQD + oiCardIQD + adCashIQD + adCardIQD - purchIQD;
     const grandUSD = ciCashUSD + coCashUSD + resCashUSD + oiUSD + adCashUSD - purchUSD;
     const dateStr  = `${shiftStart.getFullYear()}-${pad(shiftStart.getMonth()+1)}-${pad(shiftStart.getDate())}`;
 
@@ -4180,13 +4240,14 @@ function downloadShiftReport(autoExcel = false, shiftId = null, monthKey = null,
 
         // OUTSIDE INCOME
         h += shead('Outside Income', 8);
-        h += `<tr>${['#','Name','Date','Price (IQD)','Price ($)','','','Notes'].map(v=>hcell(v)).join('')}</tr>`;
+        h += `<tr>${['#','Name','Date','Cash (IQD)','Cash ($)','MasterCard (IQD)','','Notes'].map(v=>hcell(v)).join('')}</tr>`;
         if (outsideIncomeToday.length) {
             outsideIncomeToday.forEach((p, i) => {
-                h += drow([i+1, p.name||'—', p.date?new Date(p.date).toLocaleString():'—', p.priceIQD>0?`IQD ${fmtIQD(p.priceIQD)}`:'—', p.priceUSD>0?`$${fmtUSD(p.priceUSD)}`:'—', '', '', p.notes||'—'], i);
+                const oCard = p.priceCardIQD || 0;
+                h += drow([i+1, p.name||'—', p.date?new Date(p.date).toLocaleString():'—', p.priceIQD>0?`IQD ${fmtIQD(p.priceIQD)}`:'—', p.priceUSD>0?`$${fmtUSD(p.priceUSD)}`:'—', oCard>0?`IQD ${fmtIQD(oCard)}`:'—', '', p.notes||'—'], i);
             });
         } else { h += empty('No outside income today', 8); }
-        h += sub(['','','SUBTOTAL', `IQD ${fmtIQD(oiIQD)}`, `$${fmtUSD(oiUSD)}`, '', '', '']);
+        h += sub(['','','SUBTOTAL', oiIQD>0?`IQD ${fmtIQD(oiIQD)}`:'—', oiUSD>0?`$${fmtUSD(oiUSD)}`:'—', oiCardIQD>0?`IQD ${fmtIQD(oiCardIQD)}`:'—', '', '']);
         h += `<tr><td colspan="8" style="padding:6px;"></td></tr>`;
 
         // PURCHASES (DEDUCTIONS)
@@ -4230,7 +4291,8 @@ function downloadShiftReport(autoExcel = false, shiftId = null, monthKey = null,
         h += vrow('Reservation Deposits (MasterCard)', `IQD ${fmtIQD(resCardIQD)}`, '—');
         h += vrow('Additional Deposits (Cash)',        `IQD ${fmtIQD(adCashIQD)}`,  `$${fmtUSD(adCashUSD)}`);
         h += vrow('Additional Deposits (MasterCard)',  `IQD ${fmtIQD(adCardIQD)}`,  '—');
-        h += vrow('Outside Income',                   `IQD ${fmtIQD(oiIQD)}`,       `$${fmtUSD(oiUSD)}`);
+        h += vrow('Outside Income (Cash)',              `IQD ${fmtIQD(oiIQD)}`,       `$${fmtUSD(oiUSD)}`);
+        h += vrow('Outside Income (MasterCard)',       `IQD ${fmtIQD(oiCardIQD)}`,   '—');
         h += vneg('Purchases — Cash (Deducted)',        purchCashIQDShift>0?`- IQD ${fmtIQD(purchCashIQDShift)}`:'—', purchUSD>0?`- $${fmtUSD(purchUSD)}`:'—');
         h += vneg('Purchases — MasterCard (Deducted)', purchCardIQDShift>0?`- IQD ${fmtIQD(purchCardIQDShift)}`:'—', '—');
         h += `<tr><td colspan="8" style="padding:4px;"></td></tr>`;
@@ -5155,32 +5217,42 @@ function openRoomServiceModal(roomId) {
 
 // ==================== PURCHASES ====================
 function loadPurchasesPage() {
-    const tbody = document.getElementById('purchasesTable');
-    const purchases = hotelData.purchases;
+    const tbody     = document.getElementById('purchasesTable');
+    const thAdded   = document.getElementById('purchAddedByTh');
+    const isAdmin   = loggedInUser?.role === 'admin';
+    const allArr    = hotelData.purchases || [];
+    // reception sees only their own entries; original index preserved for delete
+    const display   = isAdmin
+        ? allArr.map((p, i) => ({ p, i }))
+        : allArr.map((p, i) => ({ p, i })).filter(({ p }) => p.addedBy === loggedInUser?.name);
+    const colCount  = isAdmin ? 9 : 8;
+    if (thAdded) thAdded.style.display = isAdmin ? '' : 'none';
 
-    if (!purchases || purchases.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" class="text-center text-gray-500 py-8">${t('no_purchases')}</td></tr>`;
+    if (!display.length) {
+        tbody.innerHTML = `<tr><td colspan="${colCount}" class="text-center text-gray-500 py-8">${t('no_purchases')}</td></tr>`;
         return;
     }
 
-    tbody.innerHTML = purchases.map((p, i) => {
-        const date = new Date(p.date).toLocaleDateString();
-        const iqd = p.priceIQD != null ? p.priceIQD : (p.price || 0);
-        const usd = p.priceUSD || 0;
-        const card = p.priceCardIQD || 0;
-        const iqdCell  = iqd  > 0 ? `IQD ${fmtIQD(iqd)}`  : '—';
-        const usdCell  = usd  > 0 ? `$${fmtUSD(usd)}`      : '—';
-        const cardCell = card > 0 ? `IQD ${fmtIQD(card)}`  : '—';
+    tbody.innerHTML = display.map(({ p, i }, rowNum) => {
+        const date     = new Date(p.date).toLocaleDateString();
+        const iqd      = p.priceIQD != null ? p.priceIQD : (p.price || 0);
+        const usd      = p.priceUSD || 0;
+        const card     = p.priceCardIQD || 0;
+        const iqdCell  = iqd  > 0 ? `IQD ${fmtIQD(iqd)}` : '—';
+        const usdCell  = usd  > 0 ? `$${fmtUSD(usd)}`     : '—';
+        const cardCell = card > 0 ? `IQD ${fmtIQD(card)}` : '—';
+        const addedByCell = isAdmin ? `<td>${p.addedBy || '—'}</td>` : '';
         return `<tr>
-            <td>${i + 1}</td>
+            <td>${rowNum + 1}</td>
             <td>${p.name}</td>
             <td>${iqdCell}</td>
             <td>${usdCell}</td>
             <td>${cardCell}</td>
             <td>${p.notes || '—'}</td>
             <td>${date}</td>
+            ${addedByCell}
             <td>
-                ${loggedInUser?.role === 'admin' ? `<button class="btn btn-danger btn-sm" onclick="deletePurchase(${i})"><i class="fas fa-trash"></i></button>` : ''}
+                ${isAdmin ? `<button class="btn btn-danger btn-sm" onclick="deletePurchase(${i})"><i class="fas fa-trash"></i></button>` : ''}
             </td>
         </tr>`;
     }).join('');
@@ -5217,27 +5289,39 @@ function deletePurchase(index) {
 }
 
 function loadOutsideIncomePage() {
-    const tbody = document.getElementById('outsideIncomeTable');
-    const items = hotelData.outsideIncome || [];
+    const tbody    = document.getElementById('outsideIncomeTable');
+    const thAdded  = document.getElementById('oiAddedByTh');
+    const isAdmin  = loggedInUser?.role === 'admin';
+    const allArr   = hotelData.outsideIncome || [];
+    // reception sees only their own entries; original index preserved for delete
+    const display  = isAdmin
+        ? allArr.map((p, i) => ({ p, i }))
+        : allArr.map((p, i) => ({ p, i })).filter(({ p }) => p.addedBy === loggedInUser?.name);
+    const colCount = isAdmin ? 9 : 8;
+    if (thAdded) thAdded.style.display = isAdmin ? '' : 'none';
 
-    if (!items.length) {
-        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-gray-500 py-8">${t('no_outside_income')}</td></tr>`;
+    if (!display.length) {
+        tbody.innerHTML = `<tr><td colspan="${colCount}" class="text-center text-gray-500 py-8">${t('no_outside_income')}</td></tr>`;
         return;
     }
 
-    tbody.innerHTML = items.map((p, i) => {
-        const date = new Date(p.date).toLocaleDateString();
-        const iqdCell = p.priceIQD > 0 ? `IQD ${fmtIQD(p.priceIQD)}` : '—';
-        const usdCell = p.priceUSD > 0 ? `$${fmtUSD(p.priceUSD)}` : '—';
+    tbody.innerHTML = display.map(({ p, i }, rowNum) => {
+        const date     = new Date(p.date).toLocaleDateString();
+        const iqdCell  = p.priceIQD     > 0 ? `IQD ${fmtIQD(p.priceIQD)}`     : '—';
+        const usdCell  = p.priceUSD     > 0 ? `$${fmtUSD(p.priceUSD)}`         : '—';
+        const cardCell = p.priceCardIQD > 0 ? `IQD ${fmtIQD(p.priceCardIQD)}` : '—';
+        const addedByCell = isAdmin ? `<td>${p.addedBy || '—'}</td>` : '';
         return `<tr>
-            <td>${i + 1}</td>
+            <td>${rowNum + 1}</td>
             <td>${p.name}</td>
             <td>${iqdCell}</td>
             <td>${usdCell}</td>
+            <td>${cardCell}</td>
             <td>${p.notes || '—'}</td>
             <td>${date}</td>
+            ${addedByCell}
             <td>
-                ${loggedInUser?.role === 'admin' ? `<button class="btn btn-danger btn-sm" onclick="deleteOutsideIncome(${i})"><i class="fas fa-trash"></i></button>` : ''}
+                ${isAdmin ? `<button class="btn btn-danger btn-sm" onclick="deleteOutsideIncome(${i})"><i class="fas fa-trash"></i></button>` : ''}
             </td>
         </tr>`;
     }).join('');
@@ -5246,18 +5330,19 @@ function loadOutsideIncomePage() {
 function handleOutsideIncomeSubmit(e) {
     e.preventDefault();
     if (!requireOnline()) return;
-    const name = document.getElementById('outsideIncomeName').value.trim();
-    const priceIQD = parseFloat((document.getElementById('outsideIncomePriceIQD').value || '').replace(/,/g, '')) || 0;
-    const priceUSD = parseFloat(document.getElementById('outsideIncomePriceUSD').value) || 0;
-    const notes = document.getElementById('outsideIncomeNotes').value.trim();
+    const name         = document.getElementById('outsideIncomeName').value.trim();
+    const priceIQD     = parseFloat((document.getElementById('outsideIncomePriceIQD').value || '').replace(/,/g, '')) || 0;
+    const priceUSD     = parseFloat(document.getElementById('outsideIncomePriceUSD').value) || 0;
+    const priceCardIQD = parseFloat((document.getElementById('outsideIncomePriceCardIQD').value || '').replace(/,/g, '')) || 0;
+    const notes        = document.getElementById('outsideIncomeNotes').value.trim();
 
-    if (!name || (priceIQD <= 0 && priceUSD <= 0)) {
+    if (!name || (priceIQD <= 0 && priceUSD <= 0 && priceCardIQD <= 0)) {
         showToast('Enter a name and at least one price.', 'error');
         return;
     }
 
     if (!Array.isArray(hotelData.outsideIncome)) hotelData.outsideIncome = [];
-    hotelData.outsideIncome.push({ name, priceIQD, priceUSD, notes, date: new Date().toISOString(), addedBy: loggedInUser?.name || '—' });
+    hotelData.outsideIncome.push({ name, priceIQD, priceUSD, priceCardIQD, notes, date: new Date().toISOString(), addedBy: loggedInUser?.name || '—' });
     saveDataToStorage();
     closeModal('outsideIncomeModal');
     document.getElementById('outsideIncomeForm').reset();
