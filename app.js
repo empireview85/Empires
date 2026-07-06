@@ -1426,6 +1426,19 @@ function handleCheckIn(e) {
     const tempRoomId = parseInt(document.getElementById('checkInForm').dataset.tempRoomId || '0');
     const isTemp = tempRoomId === room.id && room.status === 'reserved' && room.reservationInfo;
 
+    // Checking in the actual reserved guest (not a temp walk-in) — the deposit fields above were
+    // pre-filled by openCheckInFromReservation() from the reservation's already-collected amount,
+    // which was already credited to whoever took the reservation (via reservationLog). Tag how much
+    // of this guest's deposit is that carried-over money, capped at what was actually pre-filled, so
+    // reports can keep it in the guest's running total (needed for the checkout balance-due math)
+    // without counting it a second time as fresh income under whoever happens to check the guest in.
+    if (!isTemp && room.status === 'reserved' && room.reservationInfo) {
+        const ri = room.reservationInfo;
+        guest.depositCarryCashIQD = Math.min(depositCashIQD, ri.depositCashIQD || 0);
+        guest.depositCarryCashUSD = Math.min(depositCashUSD, ri.depositCashUSD || 0);
+        guest.depositCarryCardIQD = Math.min(depositCardIQD, ri.depositCardIQD || 0);
+    }
+
     if (isTemp) {
         // Validate checkout is before reservation arrival
         const checkoutDT  = new Date(guest.checkOut);
@@ -2279,10 +2292,13 @@ function updateReportsStats() {
 
     // Deposits (check-in + any mid-stay top-ups, already cumulative) count in the period they
     // checked in, the same way the rest of this page treats deposits.
+    // Subtract out any portion already counted as a reservation deposit (see depositCarry* in
+    // handleCheckIn) so a reserved room's deposit isn't counted once at reservation time and again
+    // at check-in.
     const checkInGuests = _reportDateFrom ? hotelData.guests.filter(g => inRange(g.checkIn)) : hotelData.guests;
-    let cashIQD = checkInGuests.reduce((s, g) => s + (g.depositCashIQD || 0), 0);
-    let cashUSD = checkInGuests.reduce((s, g) => s + (g.depositCashUSD || 0), 0);
-    let cardIQD = checkInGuests.reduce((s, g) => s + (g.depositCardIQD || 0), 0);
+    let cashIQD = checkInGuests.reduce((s, g) => s + (g.depositCashIQD || 0) - (g.depositCarryCashIQD || 0), 0);
+    let cashUSD = checkInGuests.reduce((s, g) => s + (g.depositCashUSD || 0) - (g.depositCarryCashUSD || 0), 0);
+    let cardIQD = checkInGuests.reduce((s, g) => s + (g.depositCardIQD || 0) - (g.depositCarryCardIQD || 0), 0);
 
     // Checkout payments — the actual cash/card collected at checkout (covers room charges +
     // services + any remaining balance after the deposit), counted in the period they checked out.
@@ -2522,9 +2538,10 @@ function loadDashboard() {
 function calculateTotalIncomeByMethod() {
     let cashIQD = 0, cashUSD = 0, cardIQD = 0;
     hotelData.guests.forEach(g => {
-        cashIQD += (g.depositCashIQD || 0) + (g.checkoutCashIQD || 0);
-        cashUSD += (g.depositCashUSD || 0) + (g.checkoutCashUSD || 0);
-        cardIQD += (g.depositCardIQD || 0) + (g.checkoutCardIQD || 0);
+        // Subtract depositCarry* — that portion was already counted below under reservationLog.
+        cashIQD += (g.depositCashIQD || 0) - (g.depositCarryCashIQD || 0) + (g.checkoutCashIQD || 0);
+        cashUSD += (g.depositCashUSD || 0) - (g.depositCarryCashUSD || 0) + (g.checkoutCashUSD || 0);
+        cardIQD += (g.depositCardIQD || 0) - (g.depositCarryCardIQD || 0) + (g.checkoutCardIQD || 0);
     });
     (hotelData.reservationLog || []).filter(e => e.status !== 'cancelled').forEach(e => {
         cashIQD += e.depositCashIQD || 0;
@@ -4090,15 +4107,17 @@ function downloadShiftReport(autoExcel = false, shiftId = null, monthKey = null,
     // so they already include any mid-stay top-ups. Subtract the logged top-ups back out here to get
     // just what was collected at check-in — otherwise a top-up would be counted twice in the report
     // (once because it's baked into the running total, once again in its own "Additional Deposits" row).
+    // Also subtracts depositCarry* — money already credited to whoever took the reservation
+    // (reservationLog, counted below) shouldn't be re-counted again for whoever checks the guest in.
     function checkInOnlyDeposit(g) {
         const log = Array.isArray(g.depositLog) ? g.depositLog : [];
         const adCashIQD = log.reduce((s, d) => s + (d.cashIQD||0), 0);
         const adCashUSD = log.reduce((s, d) => s + (d.cashUSD||0), 0);
         const adCardIQD = log.reduce((s, d) => s + (d.cardIQD||0), 0);
         return {
-            cashIQD: (g.depositCashIQD||0) - adCashIQD,
-            cashUSD: (g.depositCashUSD||0) - adCashUSD,
-            cardIQD: (g.depositCardIQD||0) - adCardIQD
+            cashIQD: (g.depositCashIQD||0) - adCashIQD - (g.depositCarryCashIQD||0),
+            cashUSD: (g.depositCashUSD||0) - adCashUSD - (g.depositCarryCashUSD||0),
+            cardIQD: (g.depositCardIQD||0) - adCardIQD - (g.depositCarryCardIQD||0)
         };
     }
 
@@ -4675,11 +4694,20 @@ function executeExport() {
         // room charges + services) are combined into one figure per channel, no separate deposit line.
         if (sel('exp_summary')) {
             let cashIQD = 0, cashUSD = 0, cardIQD = 0;
-            checkins.forEach(g => { cashIQD += g.depositCashIQD||0; cashUSD += g.depositCashUSD||0; cardIQD += g.depositCardIQD||0; });
+            // Subtract depositCarry* — already counted below under resLog (reservation deposits).
+            checkins.forEach(g => { cashIQD += (g.depositCashIQD||0)-(g.depositCarryCashIQD||0); cashUSD += (g.depositCashUSD||0)-(g.depositCarryCashUSD||0); cardIQD += (g.depositCardIQD||0)-(g.depositCarryCardIQD||0); });
             checkouts.forEach(g => { cashIQD += g.checkoutCashIQD||0; cashUSD += g.checkoutCashUSD||0; cardIQD += g.checkoutCardIQD||0; });
             resLog.forEach(e => { cashIQD += e.depositCashIQD||0; cashUSD += e.depositCashUSD||0; cardIQD += e.depositCardIQD||0; });
-            const pIQD = purchases.reduce((s,p) => { const v = p.priceIQD!=null?p.priceIQD:(p.price||0); return s+v; }, 0);
+            const pCashIQD = purchases.reduce((s,p) => { const v = p.priceIQD!=null?p.priceIQD:(p.price||0); return s+v; }, 0);
+            const pCardIQD = purchases.reduce((s,p) => s+(p.priceCardIQD||0), 0);
             const pUSD = purchases.reduce((s,p) => s+(p.priceUSD||0), 0);
+            // Outside income (e.g. hotel-run side revenue not tied to a guest stay) — must be added
+            // back in, the same way the on-screen Reports dashboard does, otherwise the exported
+            // NET REVENUE undercounts by exactly however much outside income came in this period.
+            const oi = (hotelData.outsideIncome || []).filter(p => inRange(p.date));
+            const oiCashIQD = oi.reduce((s,p) => s+(p.priceIQD||0), 0);
+            const oiCashUSD = oi.reduce((s,p) => s+(p.priceUSD||0), 0);
+            const oiCardIQD = oi.reduce((s,p) => s+(p.priceCardIQD||0), 0);
             addSheet('Summary', [
                 [`${hotel} — Export Report`],
                 ['Period:', range],
@@ -4691,10 +4719,15 @@ function executeExport() {
                 ['Total Income — Cash (IQD)', `IQD ${fmtIQD(cashIQD)}`],
                 ['Total Income — Cash ($)', `$${cashUSD.toFixed(2)}`],
                 ['Total Income — MasterCard (IQD)', `IQD ${fmtIQD(cardIQD)}`],
-                ['Total Purchases (IQD)', `IQD ${fmtIQD(pIQD)}`],
+                ['Total Outside Income — Cash (IQD)', `IQD ${fmtIQD(oiCashIQD)}`],
+                ['Total Outside Income — Cash ($)', `$${oiCashUSD.toFixed(2)}`],
+                ['Total Outside Income — MasterCard (IQD)', `IQD ${fmtIQD(oiCardIQD)}`],
+                ['Total Purchases — Cash (IQD)', `IQD ${fmtIQD(pCashIQD)}`],
+                ['Total Purchases — MasterCard (IQD)', `IQD ${fmtIQD(pCardIQD)}`],
                 ['Total Purchases ($)', `$${pUSD.toFixed(2)}`],
-                ['NET REVENUE — Cash (IQD)', `IQD ${fmtIQD(cashIQD - pIQD)}`],
-                ['NET REVENUE — Cash ($)', `$${(cashUSD - pUSD).toFixed(2)}`],
+                ['NET REVENUE — Cash (IQD)', `IQD ${fmtIQD(cashIQD + oiCashIQD - pCashIQD)}`],
+                ['NET REVENUE — Cash ($)', `$${(cashUSD + oiCashUSD - pUSD).toFixed(2)}`],
+                ['NET REVENUE — MasterCard (IQD)', `IQD ${fmtIQD(cardIQD + oiCardIQD - pCardIQD)}`],
                 [],
                 ['OPERATIONAL SUMMARY', 'Count'],
                 ['Check-ins (period)', checkins.length],
@@ -4809,11 +4842,12 @@ function executeExport() {
                 const resCashIQD = roomRes.reduce((s,e)=>s+(e.depositCashIQD||0),0);
                 const resCashUSD = roomRes.reduce((s,e)=>s+(e.depositCashUSD||0),0);
                 const resCardIQD = roomRes.reduce((s,e)=>s+(e.depositCardIQD||0),0);
-                // Check-in deposits for this room (all guests who checked in)
+                // Check-in deposits for this room (all guests who checked in). Subtract depositCarry*
+                // — already counted above under resCashIQD/resCashUSD/resCardIQD (reservation deposits).
                 const roomGuests = allGuests.filter(g => g.roomId===room.id && inRange(g.checkIn));
-                const ciCashIQD = roomGuests.reduce((s,g)=>s+(g.depositCashIQD||0),0);
-                const ciCashUSD = roomGuests.reduce((s,g)=>s+(g.depositCashUSD||0),0);
-                const ciCardIQD = roomGuests.reduce((s,g)=>s+(g.depositCardIQD||0),0);
+                const ciCashIQD = roomGuests.reduce((s,g)=>s+(g.depositCashIQD||0)-(g.depositCarryCashIQD||0),0);
+                const ciCashUSD = roomGuests.reduce((s,g)=>s+(g.depositCashUSD||0)-(g.depositCarryCashUSD||0),0);
+                const ciCardIQD = roomGuests.reduce((s,g)=>s+(g.depositCardIQD||0)-(g.depositCarryCardIQD||0),0);
 
                 const totalCashIQD = cashIQD + resCashIQD + ciCashIQD;
                 const totalCashUSD = cashUSD + resCashUSD + ciCashUSD;
