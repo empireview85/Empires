@@ -3099,6 +3099,15 @@ function loadCleanerPage() {
 function updateRoomCleaning(roomId, newStatus) {
     const room = hotelData.rooms.find(r => r.id === roomId);
     if (!room) return;
+    // A room that still has currentGuest set was sent for cleaning mid-stay (e.g. reception marked
+    // an occupied room "Cleaning" so housekeeping could tidy it) — real checkouts always clear
+    // currentGuest first, before the room ever reaches "cleaning". So if a guest is still attached,
+    // finishing the clean must restore "occupied" with that same guest/deposit/services intact,
+    // never "available" — otherwise reception would see the room as empty and could double-book it
+    // out from under the guest who's still there.
+    if (newStatus === 'available' && room.currentGuest) {
+        newStatus = 'occupied';
+    }
     room.status = newStatus;
     saveDataToStorage();
     showToast(t('toast_status_updated'), 'success');
@@ -4158,7 +4167,10 @@ function downloadShiftReport(autoExcel = false, shiftId = null, monthKey = null,
     const purchIQD = purchCashIQDShift + purchCardIQDShift;
     const purchUSD = purchasesToday.reduce((sum, p) => sum + (p.priceUSD||0), 0);
 
-    const grandIQD = ciCashIQD + ciCardIQD + coCashIQD + coCardIQD + resCashIQD + resCardIQD + oiIQD + oiCardIQD + adCashIQD + adCardIQD - purchIQD;
+    // Cash (IQD) and MasterCard (IQD) are tracked as separate vault totals — a MasterCard purchase
+    // or income never mixes into the cash drawer, so the report shouldn't merge them into one figure.
+    const grandCashIQD = ciCashIQD + coCashIQD + resCashIQD + oiIQD + adCashIQD - purchCashIQDShift;
+    const grandCardIQD = ciCardIQD + coCardIQD + resCardIQD + oiCardIQD + adCardIQD - purchCardIQDShift;
     const grandUSD = ciCashUSD + coCashUSD + resCashUSD + oiUSD + adCashUSD - purchUSD;
     const dateStr  = `${shiftStart.getFullYear()}-${pad(shiftStart.getMonth()+1)}-${pad(shiftStart.getDate())}`;
 
@@ -4316,8 +4328,12 @@ function downloadShiftReport(autoExcel = false, shiftId = null, monthKey = null,
         h += vneg('Purchases — MasterCard (Deducted)', purchCardIQDShift>0?`- IQD ${fmtIQD(purchCardIQDShift)}`:'—', '—');
         h += `<tr><td colspan="8" style="padding:4px;"></td></tr>`;
         h += `<tr>
-            <td colspan="4" style="padding:11px 10px;font-weight:700;color:#fff;background:${C.grand};font-size:14px;">NET VAULT TOTAL (IQD)</td>
-            <td colspan="4" style="padding:11px 10px;font-weight:700;color:#fff;background:${C.grand};font-size:14px;text-align:right;">IQD ${fmtIQD(grandIQD)}</td>
+            <td colspan="4" style="padding:11px 10px;font-weight:700;color:#fff;background:${C.grand};font-size:14px;">NET VAULT TOTAL — Cash (IQD)</td>
+            <td colspan="4" style="padding:11px 10px;font-weight:700;color:#fff;background:${C.grand};font-size:14px;text-align:right;">IQD ${fmtIQD(grandCashIQD)}</td>
+        </tr>`;
+        h += `<tr>
+            <td colspan="4" style="padding:11px 10px;font-weight:700;color:#fff;background:${C.grand};font-size:14px;">NET VAULT TOTAL — MasterCard (IQD)</td>
+            <td colspan="4" style="padding:11px 10px;font-weight:700;color:#fff;background:${C.grand};font-size:14px;text-align:right;">IQD ${fmtIQD(grandCardIQD)}</td>
         </tr>`;
         h += `<tr>
             <td colspan="4" style="padding:11px 10px;font-weight:700;color:#fff;background:${C.grand};font-size:14px;">NET VAULT TOTAL (USD)</td>
