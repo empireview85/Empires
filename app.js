@@ -2098,12 +2098,18 @@ function viewGuestDetails(guestId) {
     const locale = currentLang === 'ar' ? 'ar-IQ' : 'en-US';
 
     // ── Services section (always IQD) ──
+    const isAdmin = loggedInUser?.role === 'admin';
     const svcTotal = guest.orders.reduce((s, o) => s + o.price * o.quantity, 0);
+    const adminOrderBtns = o => isAdmin ? `
+        <span style="display:inline-flex;gap:4px;margin-left:8px;">
+            <button onclick="openAdminEditModal('order','${guest.id}','${o.id}')" title="Edit" style="background:#eff6ff;color:#2563eb;border:none;border-radius:5px;width:24px;height:24px;cursor:pointer;font-size:0.72rem;"><i class="fas fa-pen"></i></button>
+            <button onclick="adminDeleteOrder('${guest.id}','${o.id}')" title="Delete" style="background:#fef2f2;color:#dc2626;border:none;border-radius:5px;width:24px;height:24px;cursor:pointer;font-size:0.72rem;"><i class="fas fa-trash"></i></button>
+        </span>` : '';
     const ordersHtml = guest.orders.length > 0
         ? guest.orders.map(o => `
-            <div class="flex justify-between py-2 border-b border-gray-100 text-sm">
+            <div class="flex justify-between items-center py-2 border-b border-gray-100 text-sm">
                 <span class="text-gray-700">${o.category ? catNameByKey(o.category) + ': ' : ''}${o.name} × ${o.quantity}</span>
-                <span class="font-semibold text-gray-800">IQD ${fmtIQD(o.price * o.quantity)}</span>
+                <span class="font-semibold text-gray-800" style="display:flex;align-items:center;">IQD ${fmtIQD(o.price * o.quantity)}${adminOrderBtns(o)}</span>
             </div>`).join('') +
           `<div class="flex justify-between py-2 mt-1">
                <span class="font-bold text-green-700">${t('grand_total_label')}</span>
@@ -2149,6 +2155,9 @@ function viewGuestDetails(guestId) {
     }
 
     document.getElementById('guestDetailsContent').innerHTML = `
+        ${isAdmin ? `<div class="flex justify-end mb-2">
+            <button onclick="openAdminEditModal('guestinfo','${guest.id}')" class="btn btn-secondary btn-sm"><i class="fas fa-pen"></i> Edit Info</button>
+        </div>` : ''}
         <div class="grid grid-cols-2 gap-3 mb-5">
             <div class="info-item"><div class="info-label">${t('label_full_name')}</div><div class="info-value">${guest.name}</div></div>
             <div class="info-item"><div class="info-label">${t('col_room')}</div><div class="info-value">${room ? t('room_prefix') + ' ' + room.number : t('na')}</div></div>
@@ -2173,29 +2182,43 @@ function viewGuestDetails(guestId) {
         </div>
 
         <div class="mb-4">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid #f3f4f6;">
-                <div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#10b981,#059669);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                    <i class="fas fa-hand-holding-usd" style="color:white;font-size:0.75em;"></i>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid #f3f4f6;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#10b981,#059669);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-hand-holding-usd" style="color:white;font-size:0.75em;"></i>
+                    </div>
+                    <span class="font-bold text-gray-700">${t('section_deposit') || 'Deposit / Advance Payment'} <span style="font-weight:500;color:#9ca3af;">(Check-In)</span></span>
                 </div>
-                <span class="font-bold text-gray-700">${t('section_deposit') || 'Deposit / Advance Payment'}</span>
+                ${isAdmin ? `<span style="display:flex;gap:6px;">
+                    <button onclick="openAdminEditModal('checkin','${guest.id}')" style="background:#eff6ff;color:#2563eb;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.72rem;font-weight:600;"><i class="fas fa-pen"></i> Edit</button>
+                    ${!guest.checkedOutAt ? `<button onclick="adminDeleteCheckIn('${guest.id}')" style="background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.72rem;font-weight:600;"><i class="fas fa-trash"></i> Delete</button>` : ''}
+                </span>` : ''}
             </div>
             ${(guest.depositIQD > 0 || guest.depositUSD > 0) ? `
             <div class="flex justify-between py-2 text-sm">
                 <span class="text-gray-700">${t('lbl_deposit_paid') || 'Deposit Paid'}</span>
                 <span class="font-semibold text-green-700">
-                    ${guest.depositIQD > 0 ? `IQD ${fmtIQD(guest.depositIQD)}` : ''}
-                    ${guest.depositIQD > 0 && guest.depositUSD > 0 ? ' + ' : ''}
-                    ${guest.depositUSD > 0 ? `$${guest.depositUSD.toFixed(2)}` : ''}
+                    ${guest.depositCashIQD > 0 ? `Cash IQD ${fmtIQD(guest.depositCashIQD)}` : ''}
+                    ${guest.depositCashIQD > 0 && (guest.depositCashUSD > 0 || guest.depositCardIQD > 0) ? ' + ' : ''}
+                    ${guest.depositCashUSD > 0 ? `Cash $${guest.depositCashUSD.toFixed(2)}` : ''}
+                    ${guest.depositCashUSD > 0 && guest.depositCardIQD > 0 ? ' + ' : ''}
+                    ${guest.depositCardIQD > 0 ? `MasterCard IQD ${fmtIQD(guest.depositCardIQD)}` : ''}
                 </span>
             </div>` : `<p class="text-gray-400 text-sm py-2">${t('na')}</p>`}
         </div>
 
         <div class="mb-5">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid #f3f4f6;">
-                <div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#3b82f6,#2563eb);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                    <i class="fas fa-bed" style="color:white;font-size:0.75em;"></i>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid #f3f4f6;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#3b82f6,#2563eb);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-bed" style="color:white;font-size:0.75em;"></i>
+                    </div>
+                    <span class="font-bold text-gray-700">${t('lbl_room_charges')} ${guest.checkedOutAt ? '<span style="font-weight:500;color:#9ca3af;">(Check-Out)</span>' : ''}</span>
                 </div>
-                <span class="font-bold text-gray-700">${t('lbl_room_charges')}</span>
+                ${isAdmin && guest.checkedOutAt ? `<span style="display:flex;gap:6px;">
+                    <button onclick="openAdminEditModal('checkout','${guest.id}')" style="background:#eff6ff;color:#2563eb;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.72rem;font-weight:600;"><i class="fas fa-pen"></i> Edit</button>
+                    <button onclick="adminUndoCheckOut('${guest.id}')" style="background:#fef2f2;color:#dc2626;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.72rem;font-weight:600;"><i class="fas fa-undo"></i> Undo</button>
+                </span>` : ''}
             </div>
             ${roomExpenseHtml}
         </div>
@@ -2203,6 +2226,307 @@ function viewGuestDetails(guestId) {
         <button onclick="closeModal('guestDetailsModal')" class="btn btn-primary w-full mt-2" style="justify-content:center;">${t('close')}</button>`;
 
     openModal('guestDetailsModal');
+}
+
+// ==================== ADMIN CORRECTIONS ====================
+// Lets an admin fix a receptionist's mistake after the fact — wrong price, wrong deposit split,
+// wrong checkout amount, wrong service. Every number here is read live everywhere else (Dashboard,
+// Reports page, Excel export, Shift Report) — nothing snapshots guest data — so correcting a field
+// here immediately corrects every report that reads it, including a shift report for a shift that
+// already ended.
+function closeAdminEditOverlay() {
+    document.getElementById('adminEditOverlay')?.remove();
+}
+
+// `refId` is a guest id for kinds order/checkin/checkout/guestinfo, or an array index into
+// hotelData.purchases/outsideIncome for those two kinds — the two id spaces never mix per call.
+function openAdminEditModal(kind, refId, orderId = null) {
+    if (loggedInUser?.role !== 'admin') return;
+    closeAdminEditOverlay();
+
+    const numFmt = v => Math.round(v || 0).toLocaleString('en-US');
+    const attrEsc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const iqdAttrs = `inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9]/g,'').replace(/\\B(?=(\\d{3})+(?!\\d))/g,',')"`;
+    let title = '', fieldsHtml = '', onSave = null, afterSave = null;
+    const guest = ['order', 'checkin', 'checkout', 'guestinfo'].includes(kind)
+        ? hotelData.guests.find(g => g.id === refId)
+        : null;
+    if (['order', 'checkin', 'checkout', 'guestinfo'].includes(kind) && !guest) return;
+    if (guest) afterSave = () => viewGuestDetails(refId);
+
+    if (kind === 'order') {
+        const order = (guest.orders || []).find(o => o.id === orderId);
+        if (!order) return;
+        title = `Edit Service`;
+        fieldsHtml = `
+            <div class="input-group"><label>Name</label>
+                <input type="text" id="aeName" value="${attrEsc(order.name)}"></div>
+            <div class="input-group"><label>Quantity</label>
+                <input type="number" id="aeQty" min="1" value="${order.quantity || 1}"></div>
+            <div class="input-group"><label>Unit Price (IQD)</label>
+                <input type="text" id="aePrice" value="${numFmt(order.price)}" ${iqdAttrs}></div>`;
+        onSave = () => {
+            const name = document.getElementById('aeName').value.trim();
+            const qty = parseInt(document.getElementById('aeQty').value);
+            const price = parseFloat((document.getElementById('aePrice').value || '').replace(/,/g, ''));
+            if (!name || !Number.isFinite(qty) || qty < 1 || !Number.isFinite(price) || price < 0) {
+                showToast('Enter a valid name, quantity and price.', 'error'); return false;
+            }
+            order.name = name;
+            order.quantity = qty;
+            order.price = price;
+            addActivity(`Admin corrected service "${name}" for ${guest.name}`);
+            return true;
+        };
+    } else if (kind === 'checkin') {
+        title = `Edit Check-In — ${guest.name}`;
+        fieldsHtml = `
+            <p style="font-size:0.78rem;color:#6b7280;margin-bottom:10px;">Correcting these numbers updates every report that reads them, including past shift reports.</p>
+            <div class="grid grid-cols-2 gap-3">
+                <div class="input-group" style="margin-bottom:0;"><label>Deposit Cash (IQD)</label>
+                    <input type="text" id="aeCashIQD" value="${numFmt(guest.depositCashIQD)}" ${iqdAttrs}></div>
+                <div class="input-group" style="margin-bottom:0;"><label>Deposit Cash ($)</label>
+                    <input type="number" id="aeCashUSD" step="0.01" min="0" value="${guest.depositCashUSD || 0}"></div>
+                <div class="input-group" style="margin-bottom:0;"><label>Deposit MasterCard (IQD)</label>
+                    <input type="text" id="aeCardIQD" value="${numFmt(guest.depositCardIQD)}" ${iqdAttrs}></div>
+                <div></div>
+                <div class="input-group" style="margin-bottom:0;"><label>Room Price / Night (IQD)</label>
+                    <input type="text" id="aePriceIQD" value="${numFmt(guest.basePriceIQD)}" ${iqdAttrs}></div>
+                <div class="input-group" style="margin-bottom:0;"><label>Room Price / Night ($)</label>
+                    <input type="number" id="aePriceUSD" step="0.01" min="0" value="${guest.basePriceUSD || 0}"></div>
+            </div>`;
+        onSave = () => {
+            const cashIQD  = parseFloat((document.getElementById('aeCashIQD').value || '').replace(/,/g, '')) || 0;
+            const cashUSD  = parseFloat(document.getElementById('aeCashUSD').value) || 0;
+            const cardIQD  = parseFloat((document.getElementById('aeCardIQD').value || '').replace(/,/g, '')) || 0;
+            const priceIQD = parseFloat((document.getElementById('aePriceIQD').value || '').replace(/,/g, '')) || 0;
+            const priceUSD = parseFloat(document.getElementById('aePriceUSD').value) || 0;
+            guest.depositCashIQD = cashIQD;
+            guest.depositCashUSD = cashUSD;
+            guest.depositCardIQD = cardIQD;
+            guest.depositIQD = cashIQD + cardIQD;
+            guest.depositUSD = cashUSD;
+            guest.basePriceIQD = priceIQD;
+            guest.basePriceUSD = priceUSD;
+            guest.basePrice = priceIQD || priceUSD;
+            addActivity(`Admin corrected check-in details for ${guest.name}`);
+            return true;
+        };
+    } else if (kind === 'checkout') {
+        if (!guest.checkedOutAt) return;
+        title = `Edit Check-Out — ${guest.name}`;
+        fieldsHtml = `
+            <p style="font-size:0.78rem;color:#6b7280;margin-bottom:10px;">Correcting these numbers updates every report that reads them, including past shift reports.</p>
+            <div class="grid grid-cols-2 gap-3">
+                <div class="input-group" style="margin-bottom:0;"><label>Collected Cash (IQD)</label>
+                    <input type="text" id="aeCoCashIQD" value="${numFmt(guest.checkoutCashIQD)}" ${iqdAttrs}></div>
+                <div class="input-group" style="margin-bottom:0;"><label>Collected Cash ($)</label>
+                    <input type="number" id="aeCoCashUSD" step="0.01" min="0" value="${guest.checkoutCashUSD || 0}"></div>
+                <div class="input-group" style="margin-bottom:0;"><label>Collected MasterCard (IQD)</label>
+                    <input type="text" id="aeCoCardIQD" value="${numFmt(guest.checkoutCardIQD)}" ${iqdAttrs}></div>
+                <div></div>
+                <div class="input-group" style="margin-bottom:0;"><label>Room Total Charged (${guest.roomCurrency || 'IQD'})</label>
+                    <input type="number" id="aeRoomAmt" step="0.01" min="0" value="${guest.roomAmountPaid || 0}"></div>
+                <div class="input-group" style="margin-bottom:0;"><label>Services Billed (IQD)</label>
+                    <input type="text" id="aeSvcIQD" value="${numFmt(guest.serviceAmountIQD)}" ${iqdAttrs}></div>
+            </div>`;
+        onSave = () => {
+            guest.checkoutCashIQD  = parseFloat((document.getElementById('aeCoCashIQD').value || '').replace(/,/g, '')) || 0;
+            guest.checkoutCashUSD  = parseFloat(document.getElementById('aeCoCashUSD').value) || 0;
+            guest.checkoutCardIQD  = parseFloat((document.getElementById('aeCoCardIQD').value || '').replace(/,/g, '')) || 0;
+            guest.roomAmountPaid   = parseFloat(document.getElementById('aeRoomAmt').value) || 0;
+            guest.serviceAmountIQD = parseFloat((document.getElementById('aeSvcIQD').value || '').replace(/,/g, '')) || 0;
+            guest.totalSpent = guest.roomAmountPaid;
+            addActivity(`Admin corrected check-out details for ${guest.name}`);
+            return true;
+        };
+    } else if (kind === 'guestinfo') {
+        title = `Edit Guest Info — ${guest.name}`;
+        const toLocalInput = iso => iso ? toLocalDateTimeString(new Date(iso)) : '';
+        fieldsHtml = `
+            <div class="input-group" style="margin-bottom:0;"><label>Full Name</label>
+                <input type="text" id="aeGName" value="${attrEsc(guest.name)}"></div>
+            <div class="grid grid-cols-2 gap-3 mt-3">
+                <div class="input-group" style="margin-bottom:0;"><label>Phone</label>
+                    <input type="text" id="aeGPhone" value="${attrEsc(guest.phone)}"></div>
+                <div class="input-group" style="margin-bottom:0;"><label>Email</label>
+                    <input type="email" id="aeGEmail" value="${attrEsc(guest.email)}"></div>
+                <div class="input-group" style="margin-bottom:0;"><label>Nationality</label>
+                    <input type="text" id="aeGNat" value="${attrEsc(guest.nationality)}"></div>
+                <div class="input-group" style="margin-bottom:0;"><label>Number of Guests</label>
+                    <input type="number" id="aeGNum" min="1" value="${guest.numGuests || 1}"></div>
+                <div class="input-group" style="margin-bottom:0;"><label>ID Type</label>
+                    <select id="aeGIdType">
+                        <option value="" ${!guest.idType ? 'selected' : ''}>—</option>
+                        <option value="passport" ${guest.idType==='passport'?'selected':''}>Passport</option>
+                        <option value="national_id" ${guest.idType==='national_id'?'selected':''}>National ID</option>
+                        <option value="driver_license" ${guest.idType==='driver_license'?'selected':''}>Driver License</option>
+                    </select></div>
+                <div class="input-group" style="margin-bottom:0;"><label>ID / Passport Number</label>
+                    <input type="text" id="aeGIdNum" value="${attrEsc(guest.idNumber)}"></div>
+                <div class="input-group" style="margin-bottom:0;"><label>Check-In Date &amp; Time</label>
+                    <input type="datetime-local" id="aeGCheckIn" value="${toLocalInput(guest.checkIn)}"></div>
+                <div class="input-group" style="margin-bottom:0;"><label>Check-Out Date &amp; Time</label>
+                    <input type="datetime-local" id="aeGCheckOut" value="${toLocalInput(guest.checkedOutAt || guest.checkOut)}"></div>
+            </div>`;
+        onSave = () => {
+            const name = document.getElementById('aeGName').value.trim();
+            if (!name) { showToast('Name is required.', 'error'); return false; }
+            guest.name        = name;
+            guest.phone       = document.getElementById('aeGPhone').value.trim();
+            guest.email       = document.getElementById('aeGEmail').value.trim();
+            guest.nationality = document.getElementById('aeGNat').value.trim();
+            guest.numGuests   = parseInt(document.getElementById('aeGNum').value) || 1;
+            guest.idType      = document.getElementById('aeGIdType').value;
+            guest.idNumber    = document.getElementById('aeGIdNum').value.trim();
+            const ciVal = document.getElementById('aeGCheckIn').value;
+            const coVal = document.getElementById('aeGCheckOut').value;
+            if (ciVal) guest.checkIn = new Date(ciVal).toISOString();
+            if (coVal) {
+                if (guest.checkedOutAt) guest.checkedOutAt = new Date(coVal).toISOString();
+                else guest.checkOut = new Date(coVal).toISOString();
+            }
+            // Keep the room card's guest name in sync if this guest currently occupies a room.
+            const room = hotelData.rooms.find(r => r.currentGuest?.id === guest.id);
+            if (room) room.currentGuest = { name: guest.name, id: guest.id };
+            addActivity(`Admin corrected guest info for ${guest.name}`);
+            return true;
+        };
+    } else if (kind === 'purchase' || kind === 'outsideIncome') {
+        const list = kind === 'purchase' ? (hotelData.purchases || []) : (hotelData.outsideIncome || []);
+        const entry = list[refId];
+        if (!entry) return;
+        title = kind === 'purchase' ? 'Edit Purchase' : 'Edit Outside Income';
+        fieldsHtml = `
+            <div class="input-group" style="margin-bottom:0;"><label>Name</label>
+                <input type="text" id="aeEName" value="${attrEsc(entry.name)}"></div>
+            <div class="grid grid-cols-3 gap-3 mt-3">
+                <div class="input-group" style="margin-bottom:0;"><label>Cash (IQD)</label>
+                    <input type="text" id="aeEIQD" value="${numFmt(entry.priceIQD != null ? entry.priceIQD : entry.price)}" ${iqdAttrs}></div>
+                <div class="input-group" style="margin-bottom:0;"><label>Cash ($)</label>
+                    <input type="number" id="aeEUSD" step="0.01" min="0" value="${entry.priceUSD || 0}"></div>
+                <div class="input-group" style="margin-bottom:0;"><label>MasterCard (IQD)</label>
+                    <input type="text" id="aeECardIQD" value="${numFmt(entry.priceCardIQD)}" ${iqdAttrs}></div>
+            </div>
+            <div class="input-group mt-3" style="margin-bottom:0;"><label>Notes</label>
+                <input type="text" id="aeENotes" value="${attrEsc(entry.notes)}"></div>`;
+        onSave = () => {
+            const name = document.getElementById('aeEName').value.trim();
+            const iqd  = parseFloat((document.getElementById('aeEIQD').value || '').replace(/,/g, '')) || 0;
+            const usd  = parseFloat(document.getElementById('aeEUSD').value) || 0;
+            const card = parseFloat((document.getElementById('aeECardIQD').value || '').replace(/,/g, '')) || 0;
+            if (!name || (iqd <= 0 && usd <= 0 && card <= 0)) {
+                showToast('Enter a name and at least one price.', 'error'); return false;
+            }
+            entry.name = name;
+            entry.priceIQD = iqd;
+            entry.priceUSD = usd;
+            entry.priceCardIQD = card;
+            entry.notes = document.getElementById('aeENotes').value.trim();
+            addActivity(`Admin corrected ${kind === 'purchase' ? 'purchase' : 'outside income'} "${name}"`);
+            return true;
+        };
+        afterSave = () => kind === 'purchase' ? loadPurchasesPage() : loadOutsideIncomePage();
+    } else return;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'adminEditOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+    overlay.innerHTML = `
+        <div style="background:#fff;border-radius:16px;width:100%;max-width:460px;max-height:90vh;overflow-y:auto;padding:24px;box-shadow:0 30px 60px rgba(0,0,0,0.3);">
+            <div class="flex justify-between items-center mb-5">
+                <h2 class="text-lg font-bold text-gray-800">${title}</h2>
+                <button onclick="closeAdminEditOverlay()" class="text-2xl text-gray-400 hover:text-gray-700"><i class="fas fa-times"></i></button>
+            </div>
+            ${fieldsHtml}
+            <div class="flex gap-3 mt-5">
+                <button id="aeSaveBtn" class="btn btn-success flex-1"><i class="fas fa-save"></i> Save Changes</button>
+                <button type="button" class="btn btn-secondary flex-1" onclick="closeAdminEditOverlay()">Cancel</button>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeAdminEditOverlay(); });
+    document.getElementById('aeSaveBtn').onclick = () => {
+        if (onSave() === false) return;
+        saveDataToStorage();
+        showToast('Updated successfully.', 'success');
+        closeAdminEditOverlay();
+        if (afterSave) afterSave();
+    };
+}
+
+function adminDeleteOrder(guestId, orderId) {
+    if (loggedInUser?.role !== 'admin') return;
+    const guest = hotelData.guests.find(g => g.id === guestId);
+    if (!guest || !Array.isArray(guest.orders)) return;
+    const idx = guest.orders.findIndex(o => o.id === orderId);
+    if (idx === -1) return;
+    if (!confirm(`Delete "${guest.orders[idx].name}" from ${guest.name}'s services? This cannot be undone.`)) return;
+    const name = guest.orders[idx].name;
+    guest.orders.splice(idx, 1);
+    saveDataToStorage();
+    addActivity(`Admin deleted service "${name}" for ${guest.name}`);
+    showToast('Service deleted.', 'success');
+    viewGuestDetails(guestId);
+}
+
+// Deletes an entire mistaken check-in (only offered before the guest has checked out) and frees
+// the room back up, since the whole stay never should have existed.
+function adminDeleteCheckIn(guestId) {
+    if (loggedInUser?.role !== 'admin') return;
+    const guest = hotelData.guests.find(g => g.id === guestId);
+    if (!guest || guest.checkedOutAt) return;
+    if (!confirm(`Permanently delete this check-in for ${guest.name}? This removes the whole stay record and cannot be undone.`)) return;
+    const room = hotelData.rooms.find(r => r.currentGuest?.id === guest.id);
+    if (room) {
+        room.currentGuest = null;
+        const bookable = (hotelData.settings.roomStatuses || []).find(s => s.bookable);
+        room.status = bookable ? bookable.id : 'available';
+    }
+    hotelData.guests = hotelData.guests.filter(g => g.id !== guestId);
+    saveDataToStorage();
+    addActivity(`Admin deleted check-in for ${guest.name}`);
+    showToast('Check-in deleted.', 'success');
+    closeModal('guestDetailsModal');
+    loadHistoryPage();
+}
+
+// Reverts a checkout back to an active occupied stay — e.g. a receptionist checked the wrong
+// guest out, or checked out too early. Clears all checkout-only fields and restores room state.
+function adminUndoCheckOut(guestId) {
+    if (loggedInUser?.role !== 'admin') return;
+    const guest = hotelData.guests.find(g => g.id === guestId);
+    if (!guest || !guest.checkedOutAt) return;
+    if (!confirm(`Undo checkout for ${guest.name} and restore them as a currently occupying guest?`)) return;
+
+    const room = hotelData.rooms.find(r => r.id === guest.roomId);
+    if (room) {
+        if (room.currentGuest && room.currentGuest.id !== guest.id) {
+            showToast('Cannot undo — this room is now occupied by a different guest.', 'error');
+            return;
+        }
+        room.currentGuest = { name: guest.name, id: guest.id };
+        room.status = 'occupied';
+    }
+
+    guest.checkedOutAt    = null;
+    guest.checkedOutBy    = null;
+    guest.checkoutCashIQD = 0;
+    guest.checkoutCashUSD = 0;
+    guest.checkoutCardIQD = 0;
+    guest.checkoutNote    = '';
+    guest.paymentMethod   = '';
+    guest.balanceIQD      = 0;
+    guest.balanceUSD      = 0;
+    guest.roomAmountPaid  = null;
+    guest.roomCurrency    = null;
+    guest.serviceAmountIQD = 0;
+    guest.totalSpent      = 0;
+
+    saveDataToStorage();
+    addActivity(`Admin undid checkout for ${guest.name}`);
+    showToast('Checkout undone — guest restored as occupying the room.', 'success');
+    viewGuestDetails(guestId);
 }
 
 // ==================== REPORTS ====================
@@ -5302,7 +5626,8 @@ function loadPurchasesPage() {
             <td>${date}</td>
             ${addedByCell}
             <td>
-                ${isAdmin ? `<button class="btn btn-danger btn-sm" onclick="deletePurchase(${i})"><i class="fas fa-trash"></i></button>` : ''}
+                ${isAdmin ? `<button class="btn btn-secondary btn-sm" onclick="openAdminEditModal('purchase',${i})" style="margin-right:4px;"><i class="fas fa-pen"></i></button>
+                <button class="btn btn-danger btn-sm" onclick="deletePurchase(${i})"><i class="fas fa-trash"></i></button>` : ''}
             </td>
         </tr>`;
     }).join('');
@@ -5371,7 +5696,8 @@ function loadOutsideIncomePage() {
             <td>${date}</td>
             ${addedByCell}
             <td>
-                ${isAdmin ? `<button class="btn btn-danger btn-sm" onclick="deleteOutsideIncome(${i})"><i class="fas fa-trash"></i></button>` : ''}
+                ${isAdmin ? `<button class="btn btn-secondary btn-sm" onclick="openAdminEditModal('outsideIncome',${i})" style="margin-right:4px;"><i class="fas fa-pen"></i></button>
+                <button class="btn btn-danger btn-sm" onclick="deleteOutsideIncome(${i})"><i class="fas fa-trash"></i></button>` : ''}
             </td>
         </tr>`;
     }).join('');
