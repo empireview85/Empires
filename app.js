@@ -410,6 +410,33 @@ function fmtUSD(n) {
     return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// Room + services combined, in the room's own currency — for a checked-out guest this is the real
+// final bill (isEstimate: false); for a guest still staying, it's what they'd owe if they checked
+// out right now (room rate × nights so far, plus any services already ordered), so History/Reports
+// don't show a misleading "$0.00" for every currently-occupied guest just because they haven't
+// checked out yet.
+function computeGuestTotal(guest) {
+    const svcTotal = (guest.orders || []).reduce((s, o) => s + (o.price || 0) * (o.quantity || 1), 0);
+    const rate = hotelData.settings.exchangeRate || 1500;
+
+    if (guest.roomAmountPaid != null) {
+        const symbol = guest.roomCurrency || 'IQD';
+        const svc = guest.serviceAmountIQD || 0;
+        const amount = (guest.roomAmountPaid || 0) + (symbol === 'IQD' ? svc : svc / rate);
+        return { amount, symbol, isEstimate: false };
+    }
+
+    if (!guest.checkIn) return { amount: 0, symbol: 'IQD', isEstimate: true };
+    const checkInD  = new Date(guest.checkIn);
+    const checkOutD = guest.checkOut ? new Date(guest.checkOut) : new Date();
+    const nights    = Math.max(1, Math.ceil((checkOutD - checkInD) / 86400000));
+    const isUSD      = guest.basePriceUSD > 0;
+    const nightlyRate = isUSD ? (guest.basePriceUSD || 0) : (guest.basePriceIQD || guest.basePrice || 0);
+    const roomTotal  = nightlyRate * nights;
+    const amount = roomTotal + (isUSD ? svcTotal / rate : svcTotal);
+    return { amount, symbol: isUSD ? '$' : 'IQD', isEstimate: true };
+}
+
 function toggleLanguage() {
     setLanguage(currentLang === 'en' ? 'ar' : 'en');
 }
@@ -1815,7 +1842,10 @@ function confirmCheckOut(roomId, roomAmount, roomSymbol, serviceAmountIQD) {
     guest.roomAmountPaid  = roomAmount;
     guest.roomCurrency    = roomSymbol;
     guest.serviceAmountIQD = serviceAmountIQD;
-    guest.totalSpent      = roomAmount;
+    // The stay's real total is room + services, not just the room — services are always tracked in
+    // IQD, so convert them into the room's own currency before adding, keeping totalSpent in the
+    // same currency as roomAmountPaid/roomCurrency (what every other place that reads it assumes).
+    guest.totalSpent      = roomAmount + (roomSymbol === 'IQD' ? serviceAmountIQD : serviceAmountIQD / rate);
     guest.checkedOutAt    = new Date().toISOString();
     guest.checkedOutBy    = loggedInUser?.name || '—';
     guest.checkoutNote    = (document.getElementById('checkoutNote')?.value || '').trim();
@@ -2024,13 +2054,16 @@ function renderHistoryPage() {
         const checkOut = guest.checkOut ? new Date(guest.checkOut).toLocaleDateString(locale) : '-';
         const room = hotelData.rooms.find(r => r.id === guest.roomId) ||
                      hotelData.rooms.find(r => r.currentGuest?.id === guest.id);
+        const { amount, symbol, isEstimate } = computeGuestTotal(guest);
+        const totalCell = (symbol === 'IQD' ? `IQD ${fmtIQD(amount)}` : `$${amount.toFixed(2)}`) +
+            (isEstimate ? ` <span style="color:#9ca3af;font-size:0.78em;">(so far)</span>` : '');
         const row = document.createElement('tr');
         row.innerHTML = `
             <td>${guest.name}</td>
             <td>${room ? t('room_prefix') + ' ' + room.number : t('na')}</td>
             <td>${checkIn}</td>
             <td>${checkOut}</td>
-            <td>${hotelData.settings.currencySymbol}${guest.totalSpent ? guest.totalSpent.toFixed(2) : '0.00'}</td>
+            <td>${totalCell}</td>
             <td>
                 <button onclick="viewGuestDetails('${guest.id}')" class="btn btn-primary btn-sm">
                     <i class="fas fa-eye"></i> ${t('btn_view')}
@@ -2118,38 +2151,70 @@ function viewGuestDetails(guestId) {
         : `<p class="text-gray-400 text-sm py-2">${t('no_orders')}</p>`;
 
     // ── Room Expense section ──
+    // "Grand Total" here must be room + services combined (matching guest.totalSpent, which is what
+    // the History & Records list shows) — showing the room charge alone as if it were the full total
+    // made it look smaller than money actually collected (deposit + checkout payment, which covers
+    // both room and services), which is exactly backwards and confusing.
     let roomExpenseHtml = '';
     if (guest.roomAmountPaid != null) {
         // Checked-out guest — use saved values
         const sym = guest.roomCurrency || 'IQD';
         const amt = guest.roomAmountPaid || 0;
-        const fmtAmt = sym === 'IQD' ? `IQD ${fmtIQD(amt)}` : `$ ${amt.toLocaleString()}`;
+        const svc = guest.serviceAmountIQD || 0;
+        const fmtAmt = v => sym === 'IQD' ? `IQD ${fmtIQD(v)}` : `$ ${v.toLocaleString()}`;
+        const rate = hotelData.settings.exchangeRate || 1500;
+        const total = amt + (sym === 'IQD' ? svc : svc / rate);
+        // Total actually collected across the whole stay: deposit paid at check-in + payment taken
+        // at checkout, both converted to the room's currency so they compare directly against the
+        // bill total above. This is the number that should reconcile with (be >=) the total bill —
+        // shown here explicitly so "collected" and "total" are never mysteriously out of sync.
+        const depositIQDEq = (guest.depositCashIQD||0) + (guest.depositCardIQD||0) + (guest.depositCashUSD||0) * rate;
+        const checkoutIQDEq = (guest.checkoutCashIQD||0) + (guest.checkoutCardIQD||0) + (guest.checkoutCashUSD||0) * rate;
+        const collectedIQDEq = depositIQDEq + checkoutIQDEq;
+        const collected = sym === 'IQD' ? collectedIQDEq : collectedIQDEq / rate;
         roomExpenseHtml = `
             <div class="flex justify-between py-2 text-sm">
                 <span class="text-gray-700">${t('room_charges')}</span>
-                <span class="font-semibold text-gray-800">${fmtAmt}</span>
+                <span class="font-semibold text-gray-800">${fmtAmt(amt)}</span>
             </div>
+            ${svc > 0 ? `
+            <div class="flex justify-between py-2 text-sm">
+                <span class="text-gray-700">${t('services_label')}</span>
+                <span class="font-semibold text-gray-800">${sym === 'IQD' ? `IQD ${fmtIQD(svc)}` : `$ ${(svc/rate).toFixed(2)} <span style="color:#9ca3af;">(IQD ${fmtIQD(svc)})</span>`}</span>
+            </div>` : ''}
             <div class="flex justify-between py-2 border-t border-gray-200 mt-1">
-                <span class="font-bold text-blue-700">${t('grand_total_label')}</span>
-                <span class="font-bold text-blue-700">${fmtAmt}</span>
+                <span class="font-bold text-blue-700">${t('grand_total_label')} (${t('room_charges')} + ${t('services_label')})</span>
+                <span class="font-bold text-blue-700">${fmtAmt(total)}</span>
+            </div>
+            <div class="flex justify-between py-2 mt-1" style="background:#f0fdf4;border-radius:6px;padding-left:8px;padding-right:8px;">
+                <span class="font-bold text-green-700">Total Collected (Deposit + Checkout Payment)</span>
+                <span class="font-bold text-green-700">${fmtAmt(collected)}</span>
             </div>`;
     } else if (guest.checkIn) {
-        // Still checked in — estimate from rate × nights
+        // Still checked in — estimate from rate × nights, plus any services already ordered so far
         const checkInD  = new Date(guest.checkIn);
         const checkOutD = guest.checkOut ? new Date(guest.checkOut) : new Date();
         const nights    = Math.max(1, Math.ceil((checkOutD - checkInD) / 86400000));
         const isUSD     = guest.basePriceUSD > 0;
         const rate      = isUSD ? (guest.basePriceUSD || 0) : (guest.basePriceIQD || guest.basePrice || 0);
-        const total     = rate * nights;
+        const roomTotal = rate * nights;
+        const exRate    = hotelData.settings.exchangeRate || 1500;
+        const total     = roomTotal + (isUSD ? svcTotal / exRate : svcTotal);
         const fmtRate   = isUSD ? `$ ${rate.toLocaleString()}` : `IQD ${fmtIQD(rate)}`;
+        const fmtRoomTotal = isUSD ? `$ ${roomTotal.toLocaleString()}` : `IQD ${fmtIQD(roomTotal)}`;
         const fmtTotal  = isUSD ? `$ ${total.toLocaleString()}` : `IQD ${fmtIQD(total)}`;
         roomExpenseHtml = `
             <div class="flex justify-between py-2 text-sm">
                 <span class="text-gray-700">${t('room_charges')} (${nights} ${t('nights_label')} × ${fmtRate})</span>
-                <span class="font-semibold text-gray-800">${fmtTotal}</span>
+                <span class="font-semibold text-gray-800">${fmtRoomTotal}</span>
             </div>
+            ${svcTotal > 0 ? `
+            <div class="flex justify-between py-2 text-sm">
+                <span class="text-gray-700">${t('services_label')} <span style="color:#9ca3af;">(so far)</span></span>
+                <span class="font-semibold text-gray-800">IQD ${fmtIQD(svcTotal)}</span>
+            </div>` : ''}
             <div class="flex justify-between py-2 border-t border-gray-200 mt-1">
-                <span class="font-bold text-blue-700">${t('grand_total_label')}</span>
+                <span class="font-bold text-blue-700">${t('grand_total_label')} (${t('room_charges')} + ${t('services_label')})</span>
                 <span class="font-bold text-blue-700">${fmtTotal}</span>
             </div>`;
     }
@@ -2242,20 +2307,29 @@ function closeAdminEditOverlay() {
 // hotelData.purchases/outsideIncome for those two kinds — the two id spaces never mix per call.
 function openAdminEditModal(kind, refId, orderId = null) {
     if (loggedInUser?.role !== 'admin') return;
+    if (!requireOnline()) return;
     closeAdminEditOverlay();
 
     const numFmt = v => Math.round(v || 0).toLocaleString('en-US');
     const attrEsc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const iqdAttrs = `inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9]/g,'').replace(/\\B(?=(\\d{3})+(?!\\d))/g,',')"`;
     let title = '', fieldsHtml = '', onSave = null, afterSave = null;
-    const guest = ['order', 'checkin', 'checkout', 'guestinfo'].includes(kind)
+    // `guest`/`order`/`entry` are declared with `let` and re-resolved from live hotelData right
+    // before saving (see aeSaveBtn.onclick below) — hotelData can be reassigned wholesale while
+    // this modal sits open (e.g. the Firebase realtime listener syncing another device's change),
+    // which would otherwise leave these pointing at a detached, orphaned object. Editing that stale
+    // object and saving would silently do nothing, since it's no longer part of the array that
+    // actually gets written back — exactly the kind of "I changed it but nothing downstream moved"
+    // bug this guards against.
+    let guest = ['order', 'checkin', 'checkout', 'guestinfo'].includes(kind)
         ? hotelData.guests.find(g => g.id === refId)
         : null;
+    let order = null, entry = null;
     if (['order', 'checkin', 'checkout', 'guestinfo'].includes(kind) && !guest) return;
     if (guest) afterSave = () => viewGuestDetails(refId);
 
     if (kind === 'order') {
-        const order = (guest.orders || []).find(o => o.id === orderId);
+        order = (guest.orders || []).find(o => o.id === orderId);
         if (!order) return;
         title = `Edit Service`;
         fieldsHtml = `
@@ -2336,7 +2410,10 @@ function openAdminEditModal(kind, refId, orderId = null) {
             guest.checkoutCardIQD  = parseFloat((document.getElementById('aeCoCardIQD').value || '').replace(/,/g, '')) || 0;
             guest.roomAmountPaid   = parseFloat(document.getElementById('aeRoomAmt').value) || 0;
             guest.serviceAmountIQD = parseFloat((document.getElementById('aeSvcIQD').value || '').replace(/,/g, '')) || 0;
-            guest.totalSpent = guest.roomAmountPaid;
+            // Same as confirmCheckOut: total is room + services, converted into the room's own
+            // currency so totalSpent stays consistent with roomAmountPaid/roomCurrency.
+            const rate = hotelData.settings.exchangeRate || 1500;
+            guest.totalSpent = guest.roomAmountPaid + (guest.roomCurrency === 'IQD' ? guest.serviceAmountIQD : guest.serviceAmountIQD / rate);
             addActivity(`Admin corrected check-out details for ${guest.name}`);
             return true;
         };
@@ -2393,8 +2470,7 @@ function openAdminEditModal(kind, refId, orderId = null) {
             return true;
         };
     } else if (kind === 'purchase' || kind === 'outsideIncome') {
-        const list = kind === 'purchase' ? (hotelData.purchases || []) : (hotelData.outsideIncome || []);
-        const entry = list[refId];
+        entry = (kind === 'purchase' ? (hotelData.purchases || []) : (hotelData.outsideIncome || []))[refId];
         if (!entry) return;
         title = kind === 'purchase' ? 'Edit Purchase' : 'Edit Outside Income';
         fieldsHtml = `
@@ -2447,6 +2523,17 @@ function openAdminEditModal(kind, refId, orderId = null) {
     document.body.appendChild(overlay);
     overlay.addEventListener('click', e => { if (e.target === overlay) closeAdminEditOverlay(); });
     document.getElementById('aeSaveBtn').onclick = () => {
+        if (!requireOnline()) return;
+        // Re-resolve against whatever hotelData holds right now — if it was reassigned while this
+        // modal was open, `guest`/`order`/`entry` above may point at a detached copy that's no
+        // longer part of the live array. onSave() mutates through these same closed-over bindings,
+        // so refreshing them here is what makes the edit actually land in the data that gets saved.
+        if (guest) {
+            guest = hotelData.guests.find(g => g.id === refId) || guest;
+            if (kind === 'order') order = (guest.orders || []).find(o => o.id === orderId) || order;
+        } else if (kind === 'purchase' || kind === 'outsideIncome') {
+            entry = (kind === 'purchase' ? (hotelData.purchases || []) : (hotelData.outsideIncome || []))[refId] || entry;
+        }
         if (onSave() === false) return;
         saveDataToStorage();
         showToast('Updated successfully.', 'success');
@@ -2457,6 +2544,7 @@ function openAdminEditModal(kind, refId, orderId = null) {
 
 function adminDeleteOrder(guestId, orderId) {
     if (loggedInUser?.role !== 'admin') return;
+    if (!requireOnline()) return;
     const guest = hotelData.guests.find(g => g.id === guestId);
     if (!guest || !Array.isArray(guest.orders)) return;
     const idx = guest.orders.findIndex(o => o.id === orderId);
@@ -2474,6 +2562,7 @@ function adminDeleteOrder(guestId, orderId) {
 // the room back up, since the whole stay never should have existed.
 function adminDeleteCheckIn(guestId) {
     if (loggedInUser?.role !== 'admin') return;
+    if (!requireOnline()) return;
     const guest = hotelData.guests.find(g => g.id === guestId);
     if (!guest || guest.checkedOutAt) return;
     if (!confirm(`Permanently delete this check-in for ${guest.name}? This removes the whole stay record and cannot be undone.`)) return;
@@ -2495,6 +2584,7 @@ function adminDeleteCheckIn(guestId) {
 // guest out, or checked out too early. Clears all checkout-only fields and restores room state.
 function adminUndoCheckOut(guestId) {
     if (loggedInUser?.role !== 'admin') return;
+    if (!requireOnline()) return;
     const guest = hotelData.guests.find(g => g.id === guestId);
     if (!guest || !guest.checkedOutAt) return;
     if (!confirm(`Undo checkout for ${guest.name} and restore them as a currently occupying guest?`)) return;
