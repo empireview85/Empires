@@ -51,7 +51,7 @@ const translations = {
         services_hint:'Click on an <span class="font-semibold text-red-500">occupied</span> room to add services to the guest\'s bill.',
         btn_add_service:'Add Service',
         search_history_title:'Search History', search_by_name:'Search by guest name',
-        search_by_id:'Search by ID/Passport', guest_records_title:'Guest Records',
+        search_by_room:'Search by room number', guest_records_title:'Guest Records',
         col_check_in:'Check In', col_check_out:'Check Out',
         col_total_amount:'Total Amount', no_records:'No records found', btn_view:'View',
         reports_title:'Reports & Export', btn_daily:'Daily', btn_weekly:'Weekly',
@@ -237,7 +237,7 @@ const translations = {
         services_hint:'انقر على غرفة <span class="font-semibold text-red-500">مشغولة</span> لإضافة خدمات إلى فاتورة الضيف.',
         btn_add_service:'إضافة خدمة',
         search_history_title:'البحث في السجلات', search_by_name:'البحث باسم الضيف',
-        search_by_id:'البحث بالهوية / جواز السفر', guest_records_title:'سجلات الضيوف',
+        search_by_room:'البحث برقم الغرفة', guest_records_title:'سجلات الضيوف',
         col_check_in:'الدخول', col_check_out:'الخروج',
         col_total_amount:'المبلغ الإجمالي', no_records:'لا توجد سجلات', btn_view:'عرض',
         reports_title:'التقارير والتصدير', btn_daily:'يومي', btn_weekly:'أسبوعي',
@@ -2009,7 +2009,7 @@ function loadHistoryPage() {
 
 function searchHistory() {
     const name = document.getElementById('searchName').value.toLowerCase();
-    const id = document.getElementById('searchID').value.toLowerCase();
+    const roomQuery = document.getElementById('searchRoom').value.trim().toLowerCase();
 
     let results = hotelData.guests;
 
@@ -2017,8 +2017,12 @@ function searchHistory() {
         results = results.filter(g => g.name.toLowerCase().includes(name));
     }
 
-    if (id) {
-        results = results.filter(g => g.idNumber.toLowerCase().includes(id) || g.phone.includes(id));
+    if (roomQuery) {
+        results = results.filter(g => {
+            const room = hotelData.rooms.find(r => r.id === g.roomId) ||
+                         hotelData.rooms.find(r => r.currentGuest?.id === g.id);
+            return room && String(room.number).toLowerCase().includes(roomQuery);
+        });
     }
 
     displayHistoryRecords(results);
