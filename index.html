@@ -640,6 +640,23 @@
             font-weight: 600;
         }
 
+        .table th.sortable-th {
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+        .table th.sortable-th:hover {
+            background: linear-gradient(135deg, #5568d3 0%, #66408f 100%);
+        }
+        .table th.sortable-th .sort-icon {
+            font-size: 0.8em;
+            opacity: 0.55;
+            margin-left: 4px;
+        }
+        .table th.sortable-th .sort-icon.active {
+            opacity: 1;
+        }
+
         .table td {
             padding: 15px;
             border-bottom: 1px solid #e5e7eb;
@@ -1459,13 +1476,13 @@
                         <thead>
                             <tr>
                                 <th data-i18n="col_num">#</th>
-                                <th data-i18n="col_name">Name</th>
-                                <th>Cash (IQD)</th>
-                                <th>Cash ($)</th>
-                                <th>MasterCard (IQD)</th>
+                                <th class="sortable-th" data-sort-col="name" onclick="sortTableBy('purchases','name')"><span data-i18n="col_name">Name</span> <i class="fas fa-sort sort-icon"></i></th>
+                                <th class="sortable-th" data-sort-col="iqd" onclick="sortTableBy('purchases','iqd')">Cash (IQD) <i class="fas fa-sort sort-icon"></i></th>
+                                <th class="sortable-th" data-sort-col="usd" onclick="sortTableBy('purchases','usd')">Cash ($) <i class="fas fa-sort sort-icon"></i></th>
+                                <th class="sortable-th" data-sort-col="card" onclick="sortTableBy('purchases','card')">MasterCard (IQD) <i class="fas fa-sort sort-icon"></i></th>
                                 <th>Notes</th>
-                                <th data-i18n="col_date">Date</th>
-                                <th id="purchAddedByTh">Added By</th>
+                                <th class="sortable-th" data-sort-col="date" onclick="sortTableBy('purchases','date')"><span data-i18n="col_date">Date</span> <i class="fas fa-sort sort-icon"></i></th>
+                                <th class="sortable-th" data-sort-col="addedBy" onclick="sortTableBy('purchases','addedBy')" id="purchAddedByTh">Added By <i class="fas fa-sort sort-icon"></i></th>
                                 <th data-i18n="col_action">Action</th>
                             </tr>
                         </thead>
@@ -1492,13 +1509,13 @@
                         <thead>
                             <tr>
                                 <th data-i18n="col_num">#</th>
-                                <th data-i18n="col_name">Name</th>
-                                <th>Cash (IQD)</th>
-                                <th>Cash ($)</th>
-                                <th>MasterCard (IQD)</th>
+                                <th class="sortable-th" data-sort-col="name" onclick="sortTableBy('outsideIncome','name')"><span data-i18n="col_name">Name</span> <i class="fas fa-sort sort-icon"></i></th>
+                                <th class="sortable-th" data-sort-col="iqd" onclick="sortTableBy('outsideIncome','iqd')">Cash (IQD) <i class="fas fa-sort sort-icon"></i></th>
+                                <th class="sortable-th" data-sort-col="usd" onclick="sortTableBy('outsideIncome','usd')">Cash ($) <i class="fas fa-sort sort-icon"></i></th>
+                                <th class="sortable-th" data-sort-col="card" onclick="sortTableBy('outsideIncome','card')">MasterCard (IQD) <i class="fas fa-sort sort-icon"></i></th>
                                 <th>Notes</th>
-                                <th data-i18n="col_date">Date</th>
-                                <th id="oiAddedByTh">Added By</th>
+                                <th class="sortable-th" data-sort-col="date" onclick="sortTableBy('outsideIncome','date')"><span data-i18n="col_date">Date</span> <i class="fas fa-sort sort-icon"></i></th>
+                                <th class="sortable-th" data-sort-col="addedBy" onclick="sortTableBy('outsideIncome','addedBy')" id="oiAddedByTh">Added By <i class="fas fa-sort sort-icon"></i></th>
                                 <th data-i18n="col_action">Action</th>
                             </tr>
                         </thead>
